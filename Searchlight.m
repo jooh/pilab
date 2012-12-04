@@ -117,7 +117,7 @@ classdef Searchlight < handle
                 % A far more efficient solution here would be some kind of
                 % gradient descent. The current linear search is quite
                 % dumb.
-                lininds_out = self.mapcoords(xyz);
+                out = self.mapcoords(xyz);
             else
                 if self.outputmask
                     % make the binary mask and populate with the final
