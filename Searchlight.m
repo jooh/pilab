@@ -21,7 +21,7 @@ classdef Searchlight < handle
         searchsphere % searchsphere for current radius in binary form
         spherecoords % coordinates for searchsphere centered on 0
         spherenvox % n voxels in ideal sphere (not masked)
-        outputmask = 0 % methods return linear indices or binary mask
+        outputmask = 0 % methods return column indices or binary mask
         vol % Volume instance for mask
     end
 
@@ -79,7 +79,11 @@ classdef Searchlight < handle
         end
 
         function out = mapcoords(self,xyz)
+        % Create a searchlight sphere for a given xyz coordinate (voxel
+        % index). Returns column indices into a mapped dataset by default,
+        % optionally a 3D mask instead if self.outputmask=1.
         % out = mapcoords(self,xyz)
+        %
             assert(self.vol.mask(xyz(1),xyz(2),xyz(3))==1,...
                 'coordinates %d are outside mask',xyz);
             % find voxel coordinates for current searchlight (add sphere
@@ -91,11 +95,11 @@ classdef Searchlight < handle
             coords_insidev = coords(insidev,:);
             % find coordinates inside mask
             % first back to linear indices
-            lininds_insidev = self.vol.aslinind(coords_insidev);
+            lininds_insidev = self.vol.coord2linind(coords_insidev);
             % then restrict to mask lininds
-            out = intersect(lininds_insidev,self.vol.lininds);
+            lininds_out = intersect(lininds_insidev,self.vol.lininds);
             % final estimate of how many voxels we ended up with
-            self.nvox = length(out);
+            self.nvox = length(lininds_out);
             % maybe we have to recurse in here
             if ~isempty(self.nwantedvox) && ...
                     (abs(self.nvox-self.nwantedvox)>self.nwantedtolerance)
@@ -113,12 +117,15 @@ classdef Searchlight < handle
                 % A far more efficient solution here would be some kind of
                 % gradient descent. The current linear search is quite
                 % dumb.
-                out = self.mapcoords(xyz);
+                lininds_out = self.mapcoords(xyz);
             else
                 if self.outputmask
                     % make the binary mask and populate with the final
                     % sphere
-                    out = self.vol.asmat(out);
+                    out = self.vol.data2mat(lininds_out);
+                else
+                    % Find the feature indices 
+                    out = self.vol.linind2featind(lininds_out);
                 end
             end
         end
@@ -126,7 +133,7 @@ classdef Searchlight < handle
         function out = mapinds(self,ind)
         % out = mapinds(self,ind)
             % wrapper around mapcoords
-            out = self.mapcoords(self.vol.ascoord(self.vol.lininds(ind)));
+            out = self.mapcoords(self.vol.linind2coord(self.vol.lininds(ind)));
         end
     end
 end

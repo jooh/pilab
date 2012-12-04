@@ -7,18 +7,18 @@ classdef Volume < handle
     % class owes no small debt to PyMVPA's Dataset.
     %
     % This class overloads Matlab's standard concatenation
-    % functionality so it is possible to do e.g. volboth = [vola volb] to
+    % functionality so it is possible to do e.g. volboth = [vola; volb] to
     % obtain a sensibly combined Volume instance.
     %
-    % Similarly, direct indexing and assignment are overloaded so that e.g.
-    % vol(1,:) returns the first data point, or vol(:,1) = 0 sets the first
-    % feature to 0 across all data points.
+    % Similarly, direct indexing is overloaded so that e.g.
+    % vol(1,:) returns a volume consisting only of the first data point.
     %
-    % Optional named arguments:
+    % Optional named input arguments:
     % labels: n by 1 cell array with condition names
     % chunks: n by 1 vector with data split rules (e.g. run indices)
     % order: n by 1 vector providing the correct sequence for datapoints
-    % names n by 1 cell array of names for each feature
+    % names: n by 1 cell array of names for each feature
+    % V: struct containing header info from spm_vol 
     properties
         mask % binary mask for analysis
         lininds % linear indices into mask
@@ -29,6 +29,7 @@ classdef Volume < handle
         data % ndata by nvox matrix
         names = {} % ndata by 1 cell array of raw file names for data
         labels = {}; % ndata by 1 cell array
+        labelinds = []; % ndata by 1 matrix with indices into uniquelabels
         uniquelabels = {}
         nlabels = {}
         chunks = [] % ndata by 1 vector (default ones(n,1))
@@ -54,6 +55,14 @@ classdef Volume < handle
                 'names',{},'V',struct('dim',[])});
             [vol.labels,vol.chunks,vol.order,vol.names,vol.V] = deal(...
                 labels(:),chunks(:),order(:),names(:),V(:));
+            if isfield(vol.V,'mat')
+                vol.voxsize = vox2mm(vol.V);
+            end
+            if isempty(vol.names)
+                donames = 1;
+            else
+                donames = 0;
+            end
             % parse mask input
             if isa(mask,'char')
                 % assume it's a SPM-compatible volume
@@ -64,7 +73,8 @@ classdef Volume < handle
             elseif isa(mask,'Volume')
                 % interesting!
                 % but here we need to be careful not to include data
-                [vol.mask,vol.V] = deal(mask.mask,mask.V);
+                [vol.mask,vol.V,vol.nfeatures,vol.voxsize] = deal(...
+                    mask.mask,mask.V,mask.nfeatures,mask.voxsize);
             elseif ~isempty(mask)
                 % assume header-less mask
                 vol.V = struct('dim',size(mask));
@@ -171,13 +181,15 @@ classdef Volume < handle
                         error('could not parse input data')
                 end
                 % add any names
-                vol.names = [vol.names; volnames];
+                if donames
+                    vol.names = [vol.names; volnames];
+                end
             end
             % analyse the meta data
             vol.ndata = size(vol.data,1);
             assert(isempty(vol.labels) || length(vol.labels)==vol.ndata,...
                 'number of labels does not match ndata');
-            vol.uniquelabels = unique(vol.labels);
+            [vol.uniquelabels,junk,vol.labelinds] = unique(vol.labels);
             vol.nlabels = length(vol.uniquelabels);
             if isempty(vol.chunks)
                 % assume everything is one big chunk
@@ -193,6 +205,11 @@ classdef Volume < handle
             else
                 assert(length(vol.order) == vol.ndata,...
                     'order does not match ndata');
+            end
+            % Finally, resort according to order
+            if ~issorted(vol.order)
+                [junk,inds] = sort(vol.order);
+                vol = vol(inds,:);
             end
         end
 
@@ -228,16 +245,15 @@ classdef Volume < handle
                     if length(s.subs) > 1 && ~isempty(a.mask) && ...
                             ~strcmp(s.subs{2},':')
                         mask = logical(zeros(a.V.dim));
-                        mask(s.subs{2}) = 1;
+                        % map featinds to lininds
+                        mask(a.lininds(s.subs{2})) = 1;
                     else
                         % just use the same mask again
                         mask = a.mask;
                     end
                     % make a new Volume instance
                     sref = Volume(dat,mask,'labels',labels,'chunks',...
-                        chunks,'order',order,'names',names);
-                    % and make sure volume header follows
-                    sref.V = a.V;
+                        chunks,'order',order,'names',names,'V',a.V);
                 otherwise
                     % revert to builtin behaviour
                     sref = builtin('subsref',a,s);
@@ -262,32 +278,37 @@ classdef Volume < handle
             o = Volume(varargin);
         end
 
-        function xyz = ascoord(self,linind)
-        % xyz = ascoord(self,linind)
+        function xyz = linind2coord(self,linind)
+        % xyz = linind2coord(self,linind)
             [x,y,z] = ind2sub(self.V.dim,linind);
             xyz = [x,y,z];
         end
 
-        function linind = aslinind(self,coords)
-        % linind = aslinind(self,coords)
+        function linind = coord2linind(self,coords)
+        % linind = coord2linind(self,coords)
             linind = sub2ind(self.V.dim,coords(:,1),coords(:,2),...
                 coords(:,3));
         end
 
-        function mat = asmat(self,datavec)
-        % mat = asmat(self,datavec)
+        function mat = data2mat(self,datavec)
+        % mat = data2mat(self,datavec)
             assert(length(datavec)==self.nfeatures,...
                 'datavec length does not match nfeatures')
             mat = zeros(self.vol.V.dim);
             mat(self.lininds) = datavec;
         end
 
-        function asvol(self,datavec,outpath)
-        % asvol(self,datavec,outpath)
+        function data2vol(self,datavec,outpath)
+        % data2vol(self,datavec,outpath)
             outV = self.V;
             outV.fname = outpath;
-            mat = self.asmat(datavec);
+            mat = self.data2mat(datavec);
             spm_write_vol(outV,mat);
+        end
+
+        function featind = linind2featind(self,linind)
+        % featind = linind2featind(self,linind)
+            [junk,featind] = intersect(self.lininds,linind);
         end
 
     end
