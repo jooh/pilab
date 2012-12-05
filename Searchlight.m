@@ -6,10 +6,8 @@ classdef Searchlight < handle
     % searchlight for a given location (or optionally a binary mask instead
     % if outputmask=1)
     %
-    % the nvox mapmode operates by a fairly dumb change of radius in
-    % stepsize_radius increments until an n that is inside a set tolerance
-    % parameter (default 10% of nwantedvox). Note that 0 tolerance is not
-    % usually feasible.
+    % the nvox mapmode operates by fminsearch and so runs slower than
+    % radius-based searchlights.
     properties
         mapmode = 'radius' % radius or nvox
         radius = []; % searchlight radius (mm)
@@ -17,12 +15,14 @@ classdef Searchlight < handle
         nvox = []; % number of voxels in searchlight
         nwantedvox = []; % only defined if doing mapping by nvox
         nwantedtolerance % accept searchlights that this far from nwanted
-        stepsize_radius = .1; % find target in these increments
+        stepsize_radius = .05; % find target in these increments
         searchsphere % searchsphere for current radius in binary form
         spherecoords % coordinates for searchsphere centered on 0
         spherenvox % n voxels in ideal sphere (not masked)
         outputmask = 0 % methods return column indices or binary mask
         vol % Volume instance for mask
+        xyz % coordinates of last sphere
+        optimoptions = struct('TolX',1e-100,'TolFun',1e-100,'MaxIter',1e3);
     end
 
     methods
@@ -86,6 +86,7 @@ classdef Searchlight < handle
         %
             assert(self.vol.mask(xyz(1),xyz(2),xyz(3))==1,...
                 'coordinates %d are outside mask',xyz);
+            self.xyz = xyz;
             % find voxel coordinates for current searchlight (add sphere
             % coordinates to xyz)
             coords = repmat(xyz,[self.spherenvox 1])+self.spherecoords;
@@ -100,24 +101,33 @@ classdef Searchlight < handle
             lininds_out = intersect(lininds_insidev,self.vol.lininds);
             % final estimate of how many voxels we ended up with
             self.nvox = length(lininds_out);
-            % maybe we have to recurse in here
+            % maybe we have to recurse in here (isselfcall stops infinity)
             if ~isempty(self.nwantedvox) && ...
-                    (abs(self.nvox-self.nwantedvox)>self.nwantedtolerance)
-                % change radius incrementally
-                if self.nvox < self.nwantedvox
-                    self.radius = self.radius + self.stepsize_radius;
-                else
-                    self.radius = self.radius - self.stepsize_radius;
-                end
+                    (abs(self.nvox-self.nwantedvox)>0) && ~isselfcall
+                opts = optimset(self.optimoptions);
+                [r,errmargin,exflag,output] = fminsearch(@self.findrfornvox,...
+                    self.radius,opts);
+                assert(exflag==1,'optimisation did not converge!')
+                % and generate output
+                out = self.mapcoords(xyz);
+                assert(abs(self.nvox-self.nwantedvox) < ...
+                    self.nwantedtolerance,'optimisation failed!');
+                %% find the right radius
+                %ofun = @(m) abs(-self.nwantedvox);
+                %if self.nvox < self.nwantedvox
+                    %self.radius = self.radius + self.stepsize_radius;
+                %else
+                    %self.radius = self.radius - self.stepsize_radius;
+                %end
                 % re-do the sphere
-                self.makesphere;
+                %self.makesphere;
                 % and recursively call again
                 % nb, if you get crashes due to recursion limit here you
                 % likely need to have a higher nwantedtolerance
                 % A far more efficient solution here would be some kind of
                 % gradient descent. The current linear search is quite
                 % dumb.
-                out = self.mapcoords(xyz);
+                %out = self.mapcoords(xyz);
             else
                 if self.outputmask
                     % make the binary mask and populate with the final
@@ -134,6 +144,15 @@ classdef Searchlight < handle
         % out = mapinds(self,ind)
             % wrapper around mapcoords
             out = self.mapcoords(self.vol.linind2coord(self.vol.lininds(ind)));
+        end
+
+        function ndiff = findrfornvox(self,r)
+        % ndiff = findrfornvox(self,r)
+        % used internally with optimset
+            self.radius = r;
+            self.makesphere;
+            out = self.mapcoords(self.xyz);
+            ndiff = abs(self.nwantedvox-self.nvox);
         end
     end
 end
