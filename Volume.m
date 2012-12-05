@@ -298,8 +298,8 @@ classdef Volume < handle
             mat(self.lininds) = datavec;
         end
 
-        function data2vol(self,datavec,outpath)
-        % data2vol(self,datavec,outpath)
+        function data2file(self,datavec,outpath)
+        % data2file(self,datavec,outpath)
             outV = self.V;
             outV.fname = outpath;
             mat = self.data2mat(datavec);
