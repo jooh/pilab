@@ -213,7 +213,7 @@ classdef Volume < handle
             end
         end
 
-        function sref = subsref(a,s)
+        function varargout = subsref(a,s)
             switch s(1).type
                 case '()'
                     assert(length(s)==1,'cannot subindex Volume instance');
@@ -252,11 +252,15 @@ classdef Volume < handle
                         mask = a.mask;
                     end
                     % make a new Volume instance
-                    sref = Volume(dat,mask,'labels',labels,'chunks',...
+                    varargout{1} = Volume(dat,mask,'labels',labels,'chunks',...
                         chunks,'order',order,'names',names,'V',a.V);
                 otherwise
                     % revert to builtin behaviour
-                    sref = builtin('subsref',a,s);
+                    try
+                        varargout{1} = builtin('subsref',a,s);
+                    catch
+                        builtin('subsref',a,s);
+                    end
             end
         end
 
@@ -294,7 +298,7 @@ classdef Volume < handle
         % mat = data2mat(self,datavec)
             assert(length(datavec)==self.nfeatures,...
                 'datavec length does not match nfeatures')
-            mat = zeros(self.vol.V.dim);
+            mat = zeros(self.V.dim);
             mat(self.lininds) = datavec;
         end
 
@@ -302,6 +306,12 @@ classdef Volume < handle
         % data2file(self,datavec,outpath)
             outV = self.V;
             outV.fname = outpath;
+            % now write out in appropriate numeric class (avoid quantizing)
+            if isnumeric(datavec)
+                outV.dt = [spm_type('float64') spm_platform('bigend')];
+            else
+                outV.dt = [spm_type('int32') spm_platform('bigend')];
+            end
             mat = self.data2mat(datavec);
             spm_write_vol(outV,mat);
         end
