@@ -98,8 +98,7 @@ classdef Searchlight < handle
                 self.nwantedvox,self.nmax);
             % need to iteratively scale searchlight to find a size that
             % achieves the desired n
-            % initialise with the value that worked last time
-            currentn = self.lastspheren;
+            currentn = self.nwantedvox; %self.lastspheren;
             done = 0;
             while ~done
                 % get first n coordinates
@@ -109,7 +108,8 @@ classdef Searchlight < handle
                 if self.nvox < self.nwantedvox
                     currentn = currentn+1;
                 elseif self.nvox > self.nwantedvox
-                    currentn = currentn-1;
+                    error('should not happen')
+                    %currentn = currentn-1;
                 else
                     % must be equal
                     done = 1;
