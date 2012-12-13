@@ -5,12 +5,6 @@
 % vecs = rdm2vec(rdms)
 function vecs = rdm2vec(rdms)
 
-% unpack RSA toolbox-style rdm struct arrays
-if isstruct(rdms)
-    n = size(rdms(1).RDM,1);
-    rdms = reshape([rdms.RDM],[n n length(rdms)]);
-end
-
 [r,c,z] = size(rdms);
 
 assert(r==c,'input must be square in first 2 dims!')
