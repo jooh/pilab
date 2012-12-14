@@ -9,4 +9,4 @@ function vecs = rdm2vec(rdms)
 
 assert(r==c,'input must be square in first 2 dims!')
 
-vecs = reshape(rdms(repmat(tril(true(r),-1),[1 1 z])),[nchoosek(r,2) z])';
+vecs = reshape(rdms(repmat(tril(true(r),-1),[1 1 z])),[nchoosek(r,2) z]);
