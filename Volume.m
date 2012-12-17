@@ -81,7 +81,10 @@ classdef Volume < handle
                     mask.mask,mask.V,mask.nfeatures,mask.voxsize);
             elseif ~isempty(mask)
                 % assume header-less mask
-                vol.V = struct('dim',size(mask));
+                % (but only if we haven't passed a V input argument)
+                if ~isfield(vol.V,'mat')
+                    vol.V = struct('dim',size(mask));
+                end
                 vol.mask = mask > 0;
                 vol.nfeatures = sum(vol.mask(:)>0);
             end
