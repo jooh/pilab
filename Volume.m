@@ -17,7 +17,8 @@ classdef Volume < handle
     % labels: n by 1 cell array with condition names
     % chunks: n by 1 vector with data split rules (e.g. run indices)
     % order: n by 1 vector providing the correct sequence for datapoints
-    % names: n by 1 cell array of names for each feature
+    % names: n by 1 cell array of names for each datapoint
+    % featuregroups: 1 by nfeatures matrix
     % V: struct containing header info from spm_vol 
     properties
         mask % binary mask for analysis
@@ -25,9 +26,10 @@ classdef Volume < handle
         V = struct('dim',[]) % mapped volume header for mask (optional)
         voxsize = [1 1 1] % size of voxels in mm
         nfeatures % number of in-mask voxels (columns in data)
+        featuregroups
         ndata % number of data points (rows in data)
         data % ndata by nvox matrix
-        names = {} % ndata by 1 cell array of raw file names for data
+        names = {} % ndata by 1 cell array
         labels = {}; % ndata by 1 cell array
         labelinds = []; % ndata by 1 matrix with indices into uniquelabels
         uniquelabels = {}
@@ -52,9 +54,11 @@ classdef Volume < handle
             end
             % assign named inputs (as column vectors)
             getArgs(varargin,{'labels',{},'chunks',[],'order',[],...
-                'names',{},'V',struct('dim',[])});
-            [vol.labels,vol.chunks,vol.order,vol.names,vol.V] = deal(...
-                labels(:),chunks(:),order(:),names(:),V(:));
+                'names',{},'V',struct('dim',[]),'featuregroups',[]});
+            [vol.labels,vol.chunks,vol.order,vol.names,vol.V,...
+                vol.featuregroups] = deal(...
+                labels(:),chunks(:),order(:),names(:),V(:),...
+                featuregroups(:)');
             if isfield(vol.V,'mat')
                 vol.voxsize = vox2mm(vol.V);
             end
@@ -220,40 +224,45 @@ classdef Volume < handle
                     % pull out data field 
                     dat = builtin('subsref',a.data,s);
                     % handle special cases
-                    ind = s.subs{1};
-                    if strcmp(ind,':')
-                        ind = 1:a.ndata;
+                    datind = s.subs{1};
+                    if strcmp(datind,':')
+                        datind = 1:a.ndata;
                     end
                     labels = {};
                     if ~isempty(a.labels)
-                        labels = a.labels(ind);
+                        labels = a.labels(datind);
                     end
                     chunks = [];
                     if ~isempty(a.chunks)
-                        chunks = a.chunks(ind);
+                        chunks = a.chunks(datind);
                     end
                     order = [];
                     if ~isempty(a.order)
-                        order = a.order(ind);
+                        order = a.order(datind);
                     end
                     names = {};
                     if ~isempty(a.names)
-                        names = a.names(ind);
+                        names = a.names(datind);
                     end
-                    % update mask if there is one and if we are selecting a
-                    % subset of features
-                    if length(s.subs) > 1 && ~isempty(a.mask) && ...
-                            ~strcmp(s.subs{2},':')
-                        mask = logical(zeros(a.V.dim));
-                        % map featinds to lininds
-                        mask(a.lininds(s.subs{2})) = 1;
-                    else
-                        % just use the same mask again
-                        mask = a.mask;
+                    featuregroups = a.featuregroups;
+                    mask = a.mask;
+                    if length(s.subs) > 1 
+                        % update mask if there is one and if we are
+                        % selecting a subset of features
+                        if ~isempty(a.mask) && strcmp(s.subs{2},':')
+                            mask = logical(zeros(a.V.dim));
+                            % map featinds to lininds
+                            mask(a.lininds(s.subs{2})) = 1;
+                        end
+                        % update featuregroups
+                        if ~isempty(a.featuregroups)
+                            featuregroups = a.featuregroups(s.subs{2});
+                        end
                     end
                     % make a new Volume instance
-                    varargout{1} = Volume(dat,mask,'labels',labels,'chunks',...
-                        chunks,'order',order,'names',names,'V',a.V);
+                    varargout{1} = Volume(dat,mask,'labels',labels,...
+                        'chunks',chunks,'order',order,'names',names,...
+                        'V',a.V,'featuregroups',featuregroups);
                 otherwise
                     % revert to builtin behaviour
                     try
