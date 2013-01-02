@@ -26,7 +26,7 @@ classdef Volume < handle
         V = struct('dim',[]) % mapped volume header for mask (optional)
         voxsize = [1 1 1] % size of voxels in mm
         nfeatures % number of in-mask voxels (columns in data)
-        featuregroups
+        featuregroups % 1 by nfeatures vector
         ndata % number of data points (rows in data)
         data % ndata by nvox matrix
         names = {} % ndata by 1 cell array
@@ -38,6 +38,7 @@ classdef Volume < handle
         uniquechunks = []
         nchunks = []
         order = [] % ndata by 1 vector (default 1:n)
+        limitnvol = Inf; % how many volumes to attempt to load at once
     end
 
     methods
@@ -93,7 +94,23 @@ classdef Volume < handle
             vol.lininds = find(vol.mask)';
             % wrap in cell to allow iteration
             if ~iscell(data)
-                data = {data};
+                if ischar(data) && ~isinf(vol.limitnvol)
+                    % split into manageable chunks of n
+                    % volumes
+                    n = size(data,1);
+                    indstart = 1:vol.limitnvol:n;
+                    indend = indstart+vol.limitnvol-1;
+                    indend(end) = n;
+                    nsplit = length(indstart);
+                    celldata = cell(1,nsplit);
+                    for sp = 1:nsplit
+                        celldata{sp} = data(indstart(sp):indend(sp),:);
+                    end
+                    data = celldata;
+                    clear celldata;
+                else
+                    data = {data};
+                end
             end
             for d = 1:length(data)
                 thisdata = data{d};
@@ -104,23 +121,24 @@ classdef Volume < handle
                     % check that you aren't trying to combine data with
                     % a weird mask
                     if isfield(vol.V,'mat')
-                        assert(spm_check_orientations([vol.V dV]),...
+                        % only check first EPI since we assume you are sane
+                        assert(spm_check_orientations([vol.V; dV(1)]),...
                             'data header does not match mask');
                     else
                         % set header by data instead of mask
                         vol.V = dV;
                         vol.voxsize = vox2mm(vol.V);
                     end
-                    % if this work we can safely forget about dV
-                    datamat = spm_read_vols(dV);
-                    for v = 1:length(dV)
-                        [p,volnames{v,1},ext] = fileparts(dV(v).fname);
-                    end
+                    xyz = vol.linind2coord(vol.lininds);
+                    % much, much faster than reading in the full volume and
+                    % masking
+                    datamat = spm_get_data(dV,xyz'); %spm_read_vols(dV);
+                    volnames = {dV.fname}';
                 elseif isa(thisdata,'Volume')
                     % interesting! 
                     if isfield(vol.V,'mat')
                         assert(spm_check_orientations(...
-                            [thisdata vol.V]),...
+                            [thisdata.V; vol.V]),...
                             'data header does not match mask');
                     end
                     datamat = thisdata.data;
@@ -159,20 +177,23 @@ classdef Volume < handle
                             % avoid 4D case
                             vol.V.dim = vol.V.dim(1:3);
                         end
-                        % extra call to size necessary because matlab
-                        % squeezes singletons
-                        for n = 1:size(datamat,4)
-                            thisvol = datamat(:,:,:,n);
-                            % if you have no mask
-                            if isempty(vol.lininds)
-                                % let's assume you want implicit masking
-                                vol.lininds = find(thisvol)';
-                                vol.mask = logical(zeros(tdsize(1:3)));
-                                vol.mask(vol.lininds) = 1;
-                            end
-                            vol.data = [vol.data; ...
-                                thisvol(vol.lininds)];
+                        % deal with no mask case
+                        if isempty(vol.lininds)
+                            % let's assume you want implicit masking
+                            vol.lininds = find(thisvol(:,:,:,1))';
+                            vol.mask = true(tdsize(1:3));
                         end
+                        % preallocate to speed things up a bit
+                        nvol = size(datamat,4);
+                        ndata = size(vol.data,1);
+                        vol.data(ndata+1:nvol,1:length(vol.lininds)) = NaN;
+                        % in principle we could do reshape here but in my
+                        % experience it is too memory-heavy
+                        for d = 1:nvol
+                            vtemp = datamat(:,:,:,d);
+                            vol.data(ndata+d,:) = vtemp(vol.mask);
+                        end
+                        clear datamat
                     case 2
                         % it had best be a n by nfeatures matrix (if we
                         % know nfeatures)
@@ -224,6 +245,10 @@ classdef Volume < handle
             switch s(1).type
                 case '()'
                     assert(length(s)==1,'cannot subindex Volume instance');
+                    % if no column index, assume you want all features
+                    if length(s.subs)==1
+                        s.subs{2} = 1:a.nfeatures;
+                    end
                     % pull out data field 
                     dat = builtin('subsref',a.data,s);
                     % handle special cases
@@ -250,9 +275,8 @@ classdef Volume < handle
                     featuregroups = a.featuregroups;
                     mask = a.mask;
                     if length(s.subs) > 1 
-                        % update mask if there is one and if we are
-                        % selecting a subset of features
-                        if ~isempty(a.mask) && strcmp(s.subs{2},':')
+                        % update mask if there is one
+                        if ~isempty(a.mask)
                             mask = logical(zeros(a.V.dim));
                             % map featinds to lininds
                             mask(a.lininds(s.subs{2})) = 1;
@@ -296,7 +320,7 @@ classdef Volume < handle
 
         function xyz = linind2coord(self,linind)
         % xyz = linind2coord(self,linind)
-            [x,y,z] = ind2sub(self.V.dim,linind);
+            [x,y,z] = ind2sub(self.V.dim,linind(:));
             xyz = [x,y,z];
         end
 
