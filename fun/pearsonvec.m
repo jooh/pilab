@@ -14,7 +14,7 @@ assert(ac==1,'a must be a column vector with one entry')
 assert(ar==br,'a and b do not have the same number of rows')
 
 % strip NaNs from a (ie, dissimilarities for which we have no prediction)
-nans = find(isnan(a));
+nans = isnan(a);
 a(nans) = [];
 b(nans,:) = [];
 
