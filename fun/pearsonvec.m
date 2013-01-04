@@ -13,4 +13,9 @@ assert(ac==1,'a must be a column vector with one entry')
 [br,bc] = size(b);
 assert(ar==br,'a and b do not have the same number of rows')
 
+% strip NaNs from a (ie, dissimilarities for which we have no prediction)
+nans = find(isnan(a));
+a(nans) = [];
+b(nans,:) = [];
+
 r = zscore(a,0,1) \ zscore(b,0,1);
