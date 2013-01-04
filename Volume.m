@@ -357,5 +357,15 @@ classdef Volume < handle
             [junk,featind] = intersect(self.lininds,linind);
         end
 
+        function medianfilter(self,n)
+        % medianfilter(self,n)
+        % filter the data in place along the data dimension (time) with
+        % filter size n. Operates separately on each chunk.
+            for c = 1:self.nchunks
+                chunkind = self.chunks == self.uniquechunks(c);
+                self.data(chunkind,:) = medianfilter(...
+                    self.data(chunkind,:),n);
+            end
+        end
     end
 end
