@@ -73,7 +73,7 @@ inds = 1:ndata;
 parfor p = 2:nperms
     % vector form of permuted a
     aperm = rdm2vec(a(perminds(p,:),perminds(p,:)));
-    nulldist(p,inds) = spearmanvec(aperm,b);
+    nulldist(p,inds) = pearsonvec(aperm,b);
 end
 
 % get p for each RDM
