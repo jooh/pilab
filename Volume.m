@@ -189,9 +189,9 @@ classdef Volume < handle
                         vol.data(ndata+1:nvol,1:length(vol.lininds)) = NaN;
                         % in principle we could do reshape here but in my
                         % experience it is too memory-heavy
-                        for d = 1:nvol
-                            vtemp = datamat(:,:,:,d);
-                            vol.data(ndata+d,:) = vtemp(vol.mask);
+                        for v = 1:nvol
+                            vtemp = datamat(:,:,:,v);
+                            vol.data(ndata+v,:) = vtemp(vol.mask);
                         end
                         clear datamat
                     case 2
@@ -277,7 +277,7 @@ classdef Volume < handle
                     if length(s.subs) > 1 
                         % update mask if there is one
                         if ~isempty(a.mask)
-                            mask = logical(zeros(a.V.dim));
+                            mask = false(a.V.dim);
                             % map featinds to lininds
                             mask(a.lininds(s.subs{2})) = 1;
                         end
@@ -302,7 +302,6 @@ classdef Volume < handle
 
         function o = horzcat(varargin)
             error('concatenation in feature dimension is not supported')
-            o = Volume(varargin);
         end
 
         function o = vertcat(varargin)
@@ -365,6 +364,40 @@ classdef Volume < handle
                 chunkind = self.chunks == self.uniquechunks(c);
                 self.data(chunkind,:) = medianfilter(...
                     self.data(chunkind,:),n);
+            end
+        end
+
+        function smooth(self,fwhm)
+        % smooth(self,fwhm)
+        % smooth the data in place along the feature dimension (space)
+        % using a gaussian filter with fwhm mm. Smoothing is done in the
+        % original 3D shape of the volume and the mask is re-applied after
+        % smoothing.
+            sigma = fwhm / sqrt(8*log(2));
+            % configure filter
+            % convert fwhm to standard deviation of gaussian
+            % get sigma in voxel size units
+            sigmavox = sigma ./ self.voxsize;
+            % make a filter
+            % filter size should be big enough to cover gaussian
+            fsize = ceil(3*sigmavox)*2+1;
+            % 1D filter placeholder
+            dsize = ones(1,3);
+            for dat = 1:self.ndata
+                datmat = self.data2mat(self.data(dat,:));
+                % take advantage of the fact that smoothing thrice with 3 1D
+                % gaussians is equivalent to but faster than smoothing once
+                % with a 3D gaussian (also gets around the issue that
+                % smooth3 requires a symmetric 3D kernel, with a scalar
+                % sigma)
+                for dim = 1:3
+                    dimsize = dsize;
+                    dimsize(dim) = fsize(dim);
+                    datmat = smooth3(datmat,'gaussian',dimsize,...
+                        sigmavox(dim));
+                end
+                % return to data
+                self.data(dat,:) = datmat(self.mask);
             end
         end
     end
