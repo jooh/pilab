@@ -18,7 +18,8 @@ classdef Volume < handle
     % chunks: n by 1 vector with data split rules (e.g. run indices)
     % order: n by 1 vector providing the correct sequence for datapoints
     % names: n by 1 cell array of names for each datapoint
-    % featuregroups: 1 by nfeatures matrix
+    % featurechunks: 1 by nfeatures matrix
+    % featurelabels: 1 by nfeatures cell
     % V: struct containing header info from spm_vol 
     properties
         mask % binary mask for analysis
@@ -26,7 +27,8 @@ classdef Volume < handle
         V = struct('dim',[]) % mapped volume header for mask (optional)
         voxsize = [1 1 1] % size of voxels in mm
         nfeatures % number of in-mask voxels (columns in data)
-        featuregroups % 1 by nfeatures vector
+        featurechunks % 1 by nfeatures vector
+        featurelabels = {}
         ndata % number of data points (rows in data)
         data % ndata by nvox matrix
         names = {} % ndata by 1 cell array
@@ -39,6 +41,7 @@ classdef Volume < handle
         nchunks = []
         order = [] % ndata by 1 vector (default 1:n)
         limitnvol = Inf; % how many volumes to attempt to load at once
+        custom = struct % container for anything your heart desires
     end
 
     methods
@@ -55,11 +58,12 @@ classdef Volume < handle
             end
             % assign named inputs (as column vectors)
             getArgs(varargin,{'labels',{},'chunks',[],'order',[],...
-                'names',{},'V',struct('dim',[]),'featuregroups',[]});
+                'names',{},'V',struct('dim',[]),'featurechunks',[],...
+                'featurelabels',{}});
             [vol.labels,vol.chunks,vol.order,vol.names,vol.V,...
-                vol.featuregroups] = deal(...
+                vol.featurechunks,vol.featurelabels] = deal(...
                 labels(:),chunks(:),order(:),names(:),V(:),...
-                featuregroups(:)');
+                featurechunks(:)',featurelabels(:)');
             if isfield(vol.V,'mat')
                 vol.voxsize = vox2mm(vol.V);
             end
@@ -272,7 +276,8 @@ classdef Volume < handle
                     if ~isempty(a.names)
                         names = a.names(datind);
                     end
-                    featuregroups = a.featuregroups;
+                    featurechunks = a.featurechunks;
+                    featurelabels = a.featurelabels;
                     mask = a.mask;
                     if length(s.subs) > 1 
                         % update mask if there is one
@@ -281,15 +286,19 @@ classdef Volume < handle
                             % map featinds to lininds
                             mask(a.lininds(s.subs{2})) = 1;
                         end
-                        % update featuregroups
-                        if ~isempty(a.featuregroups)
-                            featuregroups = a.featuregroups(s.subs{2});
+                        % update featurechunks
+                        if ~isempty(a.featurechunks)
+                            featurechunks = a.featurechunks(s.subs{2});
+                        end
+                        if ~isempty(a.featurelabels)
+                            featurelabels = a.featurelabels(s.subs{2});
                         end
                     end
                     % make a new Volume instance
                     varargout{1} = Volume(dat,mask,'labels',labels,...
                         'chunks',chunks,'order',order,'names',names,...
-                        'V',a.V,'featuregroups',featuregroups);
+                        'V',a.V,'featurechunks',featurechunks,...
+                        'featurelabels',featurelabels);
                 otherwise
                     % revert to builtin behaviour
                     try
