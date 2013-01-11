@@ -1,4 +1,5 @@
 classdef Volume < handle
+    % DEPRECATED - use MriVolume or BaseVolume
     % vol = Volume([data],[mask],[varargin])
     % Main data container class for pattern analysis. Very flexible input
     % handling: data and mask can be chars with paths to volumes, 3D
@@ -46,6 +47,8 @@ classdef Volume < handle
 
     methods
         function vol = Volume(data,mask,varargin)
+            warning(...
+                'Volume is deprecated. Use BaseVolume and subclasses')
             % empty return for potential sub-classing
             if nargin==0
                 return
