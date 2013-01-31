@@ -5,8 +5,7 @@ function rdmvec = asrdmvec(rdms)
 
 if isnumeric(rdms)
     [r,c,z] = size(rdms);
-    if r==c && all(diag(rdms(:,:,1))==0)
-        % assume rdmmat
+    if isrdm(rdms)
         rdmvec = rdm2vec(rdms);
     else
         % vectorised rdms then?

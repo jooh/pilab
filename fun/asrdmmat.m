@@ -1,16 +1,16 @@
 % Convert a set of vector or struct RDMs to 3D matrix form. Do nothing if
-% the RDMs are already in this format
+% the RDMs are already in this format. Note that matrix RDMs MUST have
+% zeros on the diagonal to prevent unexpected results. Use isrdm to test
+% this.
 % rdmmat = asrdmmat(in)
 function rdmmat = asrdmmat(rdms)
 
 if isnumeric(rdms)
-    [r,c,z] = size(rdms);
-    if r==c && all(diag(rdms(:,:,1))==0)
-        % assume already rdmmat
+    if isrdm(rdms)
         rdmmat = rdms;
     else
         % vectorised rdms then?
-        assert(z==1,'vectorised RDMs must be 2D')
+        assert(size(rdms,3)==1,'vectorised RDMs must be 2D')
         rdmmat = vec2rdm(rdms);
     end
 elseif isstruct(rdms)
