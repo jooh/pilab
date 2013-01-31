@@ -19,6 +19,21 @@ if ieNotDefined('nperms')
     nperms = 1000;
 end
 
+% analyse how many true conditions exist (ie, rows where not all the
+% off-diagonal entries are NaN). It doesn't make sense to permute empty
+% rows/columns.
+amat = asrdmmat(a);
+% set diagonal to NaN to make the next test easier
+amat(logical(eye(size(amat,1)))) = NaN;
+ok = ~all(isnan(amat),1);
+if ~all(ok)
+    % shrink a and b down to size
+    a = asrdmmat(a);
+    a = a(ok,ok,:);
+    b = asrdmmat(b);
+    b = b(ok,ok,:);
+end
+
 % rank transform for speed (no need to recompute on each iteration)
 a = tiedrank(asrdmvec(a));
 b = tiedrank(asrdmvec(b));
