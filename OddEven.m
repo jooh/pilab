@@ -8,8 +8,8 @@ classdef OddEven < Splitter
             if ~nargin
                 return
             end
-            if isa(in,'Volume')
-                chunks = in.chunks;
+            if isa(in,'BaseVolume')
+                chunks = in.meta.samples.chunks;
             else
                 chunks = in;
             end

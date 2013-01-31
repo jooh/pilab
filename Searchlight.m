@@ -4,6 +4,8 @@ classdef Searchlight < handle
     % Searchlight constructs a mapper that can then be queried with the
     % mapcoords(xyz) or mapinds(n) methods to return linear indices to a
     % searchlight for a given location.
+    % TODO: eventually sub-class for MriSearchlight and other potential
+    % lights
     properties
         mapmode = 'radius' % radius or nvox
         radius = []; % searchlight radius (mm)
@@ -11,9 +13,9 @@ classdef Searchlight < handle
         lastspheren % store the last n necessary to achieve masked nvox
         mapcoords % handle to either findbyr or findbyn methods
         nvox = []; % number of voxels in actual searchlight (after mask)
-        vol % Volume instance for mask
-        distances % mm distances for spheres with <min(vol.V.dim) radius
-        coords % voxel coordinates (centered on 0) for distances
+        vol % MriVolume instance for mask
+        distances % mm distances for spheres with <min(vol.header.dim) radius
+        xyz % voxel coordinates (centered on 0) for distances
         rmax % largest possible radius (limited by volume size)
         nmax % largest possible nvox
     end
@@ -21,7 +23,7 @@ classdef Searchlight < handle
     methods
         function sl = Searchlight(maskpath,mapmode,radvox)
         % sl = Searchlight(maskpath,mapmode,radvox)
-            sl.vol = Volume([],maskpath);
+            sl.vol = MriVolume([],maskpath);
             % decide on how we are going to map
             sl.mapmode = lower(mapmode);
             switch sl.mapmode
@@ -39,8 +41,8 @@ classdef Searchlight < handle
             % find coordinate / distance mapping 
             % we assume that you'd never want a radius that exceeds the
             % length of the shortest dimension in your volume
-            dims = repmat(min(sl.vol.V.dim)+isodd(min(sl.vol.V.dim)),...
-                [1 3]);
+            dims = repmat(min(sl.vol.header.dim)...
+              +isodd(min(sl.vol.header.dim)),[1 3]);
             % build xyz matrices for estimating distance from 0
             [x,y,z] = meshgrid(-dims(1):dims(1),-dims(2):dims(2),...
                 -dims(3):dims(3));
@@ -56,17 +58,17 @@ classdef Searchlight < handle
             % % extract voxel coordinates
             [coords_x,coords_y,coords_z] = ind2sub(size(distancemat),...
                 dist_lininds);
-            % make n by 3 matrix and shift to center on 0
+            % make 3 by n matrix and shift to center on 0
             % (we then add current centre coordinates to get to the right
             % place for a given searchlight sphere)
-            sl.coords = ([coords_x coords_y coords_z]) - repmat(dims+1,...
-                [length(sl.distances) 1]);
+            sl.xyz = (([coords_x coords_y coords_z]) - repmat(dims+1,...
+                [length(sl.distances) 1]))';
             % sort by distance - can now index the first n sl.coords to get
             % a searchlight of nvox size (may have to go into a while loop
             % to find nvox that are also inside mask), or for radius-based
-            % mapping, index the sl.coords where sl.distances <= r
+            % mapping, index the sl.xyz where sl.distances <= r
             [sl.distances,inds] = sort(sl.distances);
-            sl.coords = sl.coords(inds,:);
+            sl.xyz = sl.xyz(:,inds);
             % this approach only supports searchlights up to a certain
             % (ludicrous) size
             sl.rmax = max(sl.distances);
@@ -84,9 +86,9 @@ classdef Searchlight < handle
                 'current radius (%f) exceeds rmax (%f)',self.radius,...
                 self.rmax);
             % get coordinates inside radius
-            coords = self.coords(self.distances <= self.radius,:);
+            maskxyz = self.xyz(:,self.distances <= self.radius);
             % pass off to general method
-            out = self.mapsphere(xyz,coords);
+            out = self.mapsphere(xyz,maskxyz);
         end
 
         function out = mapn(self,xyz)
@@ -102,7 +104,7 @@ classdef Searchlight < handle
             done = 0;
             while ~done
                 % get first n coordinates
-                coords = self.coords(1:currentn,:);
+                coords = self.xyz(:,1:currentn);
                 % this search method is accurate but slow
                 out = self.mapsphere(xyz,coords);
                 if self.nvox < self.nwantedvox
@@ -125,18 +127,18 @@ classdef Searchlight < handle
         % Find the volume feature indices centered on xyz corresponding to
         % the entered _searchlight_ coords. Used internally by mapr/mapn.
         % You should probably call these directly instead.
-            spherenvox = size(coords,1);
+            spherenvox = size(coords,2);
             % shift to current position
-            coords = coords + repmat(xyz,[spherenvox 1]);
+            coords = coords + repmat(xyz,[1 spherenvox]);
             % find coordinates outside volume limits
-            insidev = all(coords>=1,2) & all(coords<=repmat(...
-                self.vol.V.dim,[spherenvox 1]),2);
-            coords_insidev = coords(insidev,:);
+            insidev = all(coords>=1,1) & all(coords<=repmat(...
+                self.vol.header.dim',[1 spherenvox]),1);
+            coords_insidev = coords(:,insidev);
             % find coordinates inside mask
             % first back to linear indices
             lininds_insidev = self.vol.coord2linind(coords_insidev);
             % then restrict to mask lininds
-            lininds_out = intersect(lininds_insidev,self.vol.lininds);
+            lininds_out = intersect(lininds_insidev,self.vol.linind);
             % final estimate of how many voxels we ended up with
             self.nvox = length(lininds_out);
             % convert linear indices to feature indices
@@ -147,7 +149,7 @@ classdef Searchlight < handle
         % out = mapinds(self,n)
         % Get the nth searchlight sphere.
             out = self.mapcoords(self.vol.linind2coord(...
-                self.vol.lininds(ind)));
+                self.vol.linind(ind)));
         end
     end
 end

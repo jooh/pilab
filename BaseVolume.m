@@ -44,7 +44,8 @@ classdef BaseVolume < handle
                 'uniformoutput',false);
             standardfields = fieldnames(self.standardstruct);
             getArgs(varargin,{'metasamples',self.standardstruct,...
-                'metafeatures',self.standardstruct},'verbose=0');
+                'metafeatures',self.standardstruct},'verbose=0',...
+                'suppressUnknownArgMessage=1');
             % insure meta samples and features contain mandatory
             % fields from self.standardstruct
             self.meta.samples = catstruct(self.standardstruct,metasamples);
@@ -56,17 +57,27 @@ classdef BaseVolume < handle
         % medianfilter(n)
         % filter the data in place along the sample dimension (time) with
         % filter size n. Operates separately on each chunk.
-            for c = 1:self.desc.n.chunks
-                chunkind = self.meta.samples.chunks == self.desc.unique.chunks(c);
+            for c = 1:self.desc.samples.nunique.chunks
+                chunkind = self.meta.samples.chunks == self.desc.samples.unique.chunks(c);
                 self.data(chunkind,:) = medianfilter(...
                     self.data(chunkind,:),n);
+            end
+        end
+
+        function sgdetrend(self,k,f)
+            % use a Savitzky-Golay filter to detrend the data across time.
+            % Operates separately on each chunk
+            for c = 1:self.desc.samples.nunique.chunks
+                chunkind = self.meta.samples.chunks == self.desc.samples.unique.chunks(c);
+                self.data(chunkind,:) = self.data(chunkind,:) - ...
+                    sgolayfilt(self.data(chunkind,:),k,f,[],1);
             end
         end
 
         function checkmeta(self)
         % add desc data for each meta field, check that meta data is in
         % register.
-        % descriptives(self)
+        % checkmeta(self)
             for fn = fieldnames(self.standardstruct)'
                 fnstr = fn{1};
                 % get standard fields - unique, indices, nunique
@@ -92,11 +103,52 @@ classdef BaseVolume < handle
             if isempty(self.meta.samples.order)
                 self.meta.samples.order = (1:self.nsamples)';
             end
-            % Finally, resort according to order
-            if ~issorted(self.meta.samples.order)
-                [junk,inds] = sort(self.meta.samples.order);
-                self = self(inds,:);
+        end
+
+        function vol = selectbymeta(self,varargin)
+        % convenience method for returning a volume with particular meta
+        % data in samples/features dimension. Assumes that samples and
+        % features are in register.
+        % vol = selectbymeta(self,varargin)
+            % get possible names
+            validsamp = fieldnames(self.meta.samples);
+            validfeat = fieldnames(self.meta.features);
+            valid = union(validsamp,validfeat);
+            getArgs(varargin,valid);
+            sampind = false(self.nsamples,1);
+            featind = false(1,self.nfeatures);
+            for v = valid'
+                vstr = v{1};
+                % skip if not passed as input
+                if ieNotDefined(vstr)
+                    continue
+                end
+                % check that the field is in samples and is not empty
+                insamp = isfield(self.meta.samples.(vstr)) && ...
+                    ~isempty(self.meta.samples.(vstr));
+                infeat = isfield(self.meta.features.(vstr)) && ...
+                    ~isempty(self.meta.features.(vstr));
+                % if you ask for meta data we can't find this is almost
+                % certainly a problem
+                assert(any([insamp infeat]),...
+                        'meta data does not exist: %s',vstr)
+                if insamp
+                    sampind(ismember(self.desc.samples.inds.(vstr),...
+                        eval(vstr))) = true;
+                end
+                if infeat
+                    featind(ismember(self.desc.feautres.inds.(vstr),...
+                        eval(vstr))) = true;
+                end
             end
+            % if you didn't specify any inds, probably you want all
+            if ~any(sampind)
+                sampind(:) = true;
+            end
+            if ~any(featind)
+                featind(:) = true;
+            end
+            vol = self(sampind,featind);
         end
 
         function varargout = subsref(a,s)
@@ -145,6 +197,26 @@ classdef BaseVolume < handle
                 meta.features = a.indexstructfields(a.meta.features,...
                     s.subs{2});
             end
+        end
+        % for mysterious reasons operator overloading only works for
+        % dynamic methods it seems
+        function o = horzcat(varargin)
+            error('concatenation in feature dimension is not supported')
+        end
+
+        function o = vertcat(varargin)
+            % construct a volume where the mask is read from the first
+            % entry and all instances are passed as is. Should concatenate
+            % nicely
+            % this is needed to insure that the correct sub-class is called
+            cl = class(varargin{1});
+            o = feval(cl,varargin);
+        end
+
+        function o = cat(dim,varargin)
+            % Identical to horzcat - effectively this is a 1D class
+            assert(dim==1,'concatenation is only supported in data dim')
+            o = vertcat(varargin{:});
         end
 
     end
@@ -196,23 +268,5 @@ classdef BaseVolume < handle
             end
         end
 
-        function o = horzcat(varargin)
-            error('concatenation in feature dimension is not supported')
-        end
-
-        function o = vertcat(varargin)
-            % construct a volume where the mask is read from the first
-            % entry and all instances are passed as is. Should concatenate
-            % nicely
-            % this is needed to insure that the correct sub-class is called
-            cl = class(varargin{1});
-            o = feval(cl,varargin);
-        end
-
-        function o = cat(dim,varargin)
-            % Identical to horzcat - effectively this is a 1D class
-            assert(dim==1,'concatenation is only supported in data dim')
-            o = vertcat(varargin{:});
-        end
     end
 end

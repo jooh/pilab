@@ -41,7 +41,8 @@ classdef MriVolume < BaseVolume
             % handle base meta inputs
             vol = vol.initialisemeta(varargin{:});
             % handle non-base inputs
-            getArgs(varargin,{'header',struct('dim',[])},'verbose=0');
+            getArgs(varargin,{'header',struct('dim',[])},'verbose=0',...
+                'suppressUnknownArgMessage=1');
             vol.header = header;
             if isfield(vol.header,'mat')
                 vol.voxsize = vox2mm(vol.header);
@@ -125,15 +126,16 @@ classdef MriVolume < BaseVolume
                             'data header does not match mask');
                     end
                     datamat = thisdata.data;
-                    % TODO update meta
-                    vol.meta.samples = appendstructfields(...
+                    % update meta
+                    vol.meta.samples = vol.appendstructfields(...
                         vol.meta.samples,thisdata.meta.samples,1);
-                    vol.meta.features = appendstructfields(...
+                    vol.meta.features = vol.appendstructfields(...
                         vol.meta.features,thisdata.meta.features,2);
                     % also bring along the mask if possible and needed
                     if isempty(vol.mask) && ~isempty(thisdata.mask)
                         vol.mask = thisdata.mask;
                         vol.linind = thisdata.linind;
+                        vol.xyz = vol.linind2coord(vol.linind);
                         vol.header = thisdata.header;
                         if isfield(vol.header,'mat')
                             vol.voxsize = vox2mm(vol.header);
@@ -149,6 +151,14 @@ classdef MriVolume < BaseVolume
                 end
                 % parse the data
                 tdsize = size(datamat);
+                dtype = class(datamat);
+                % initialise with class of first data. Helps conserve
+                % memory if you are using a lower precision datatype
+                % (otherwise the concatenation operation upcasts all data
+                % to double)
+                if isempty(vol.data)
+                    vol.data = feval(dtype,[]);
+                end
                 switch ndims(datamat);
                     case {3,4}
                         % it's a 3D/4D volume
@@ -222,7 +232,13 @@ classdef MriVolume < BaseVolume
         % mat = data2mat(datavec)
             assert(length(datavec)==self.nfeatures,...
                 'datavec length does not match nfeatures')
-            mat = zeros(self.header.dim,class(datavec));
+            % deal with Matlab's failure to recognise logical as a possible
+            % class for zeros...
+            if isa(datavec,'logical')
+                mat = false(self.header.dim);
+            else
+                mat = zeros(self.header.dim,class(datavec));
+            end
             mat(self.linind) = datavec;
         end
 
