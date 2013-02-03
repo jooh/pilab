@@ -10,15 +10,7 @@ end
 nt = length(inds);
 
 % fit
-betas = olsfit(designvol.data,epivol.data);
-
-% get variance estimate for t contrast
-rss = sum((epivol.data - designvol.data*betas).^2);
-df = epivol.nsamples - rank(designvol.data);
-mrss = rss / df;
-% model covariance matrix
-covmat = inv(designvol.data' * designvol.data);
-
+model = GLM(designvol.data,epivol.data);
 % prepare output matrix
 tdata = NaN([nt epivol.nfeatures]);
 % concessions to parfor to avoid memory overhead (actually, further testing
@@ -31,7 +23,7 @@ for t = 1:nt
     % make the vector for this label
     cv = double(labelinds==inds(t));
     % mean over standard error
-    tdata(t,colinds) = cv * betas ./ sqrt(mrss * (cv * covmat * cv'));
+    tdata(t,colinds) = model.tmap(cv);
 end
 
 % make the Volume instance
