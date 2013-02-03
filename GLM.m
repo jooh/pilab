@@ -7,6 +7,9 @@ classdef GLM < handle
         betas % parameter estimates (nregressors by nfeatures)
         Yfit % fitted responses (nsamples by nfeatures)
         resid % residual errors (nsamples by nfeatures)
+        n % number of observations (rows in X and Y)
+        nfeatures % number of features (columns in Y)
+        npredictors % number of regressors in model (columns in X)
         df % degrees of freedom (scalar)
         rss % residual sum of square errors
         mrss % mean residual sum of squares
@@ -26,7 +29,11 @@ classdef GLM < handle
             gl.R2 = gl.rsquare(gl.Yfit);
             % store other model fit parameters for contrasts etc
             gl.resid = gl.Yfit - Y;
-            gl.df = size(Y,1) - rank(X);
+            gl.n = size(Y,1);
+            assert(gl.n == size(X,1),'design matrix does not match Y');
+            gl.nfeatures = size(Y,2);
+            gl.npredictors = size(X,2);
+            gl.df = gl.n - rank(X);
             gl.covmat = inv(X' * X);
             gl.rss = sum(gl.resid.^2);
             gl.mrss = gl.rss / gl.df;
@@ -53,6 +60,8 @@ classdef GLM < handle
         function con = contrast(self,cv)
         % con = contrast(cv)
         % compute a contrast for self fit based on contrast vector cv.
+            assert(ndims(cv)==2 && all(size(cv)==[1 self.npredictors]),...
+                'contrast vector must be 1 by npredictors');
             con = cv * self.betas;
         end
 
