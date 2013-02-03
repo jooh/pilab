@@ -18,4 +18,4 @@ nans = isnan(a);
 a(nans) = [];
 b(nans,:) = [];
 
-r = zscore(a,0,1) \ zscore(b,0,1);
+r = olsfit(zscore(a,0,1),zscore(b,0,1));

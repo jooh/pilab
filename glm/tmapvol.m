@@ -10,7 +10,7 @@ end
 nt = length(inds);
 
 % fit
-betas = designvol.data \ epivol.data;
+betas = olsfit(designvol.data,epivol.data);
 
 % get variance estimate for t contrast
 rss = sum((epivol.data - designvol.data*betas).^2);
