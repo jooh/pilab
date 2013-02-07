@@ -1,42 +1,58 @@
-% General class for GLM fitting and cross-validation. Uses relatively heavy
-% intialisation. For speed-dependent operations olsfit is probably quicker.
+% General class for GLM fitting and cross-validation. 
+% gl = GLM(X,Y);
 classdef GLM < handle
     properties
         X % design matrix (nsamples by nregressors)
         Y % data (nsamples by nfeatures)
         betas % parameter estimates (nregressors by nfeatures)
-        Yfit % fitted responses (nsamples by nfeatures)
-        resid % residual errors (nsamples by nfeatures)
         n % number of observations (rows in X and Y)
         nfeatures % number of features (columns in Y)
         npredictors % number of regressors in model (columns in X)
         df % degrees of freedom (scalar)
-        rss % residual sum of square errors
-        mrss % mean residual sum of squares
-        covmat % covariance matrix of X
-        mse % mean squared error of fit (1 by nfeatures)
-        R2 % R^2 of fit (1 by nfeatures)
+        mrss % mean residual sum of squares (only initialised if needed)
+        covmat % covariance matrix of X (only initialised if needed)
     end
 
     methods
         function gl = GLM(X,Y)
+            % support sub-classing
+            if ~any(nargin)
+                return
+            end
             [gl.X,gl.Y] = deal(X,Y);
+            gl.getdiagnostics;
             % fit model
             gl.betas = olsfit(X,Y);
-            % generate stats for self fit
-            gl.Yfit = gl.predictY(gl.X);
-            gl.mse = gl.mserr(gl.Yfit);
-            gl.R2 = gl.rsquare(gl.Yfit);
+        end
+
+        function getdiagnostics(self)
             % store other model fit parameters for contrasts etc
-            gl.resid = gl.Yfit - Y;
-            gl.n = size(Y,1);
-            assert(gl.n == size(X,1),'design matrix does not match Y');
-            gl.nfeatures = size(Y,2);
-            gl.npredictors = size(X,2);
-            gl.df = gl.n - rank(X);
-            gl.covmat = inv(X' * X);
-            gl.rss = sum(gl.resid.^2);
-            gl.mrss = gl.rss / gl.df;
+            self.n = size(self.Y,1);
+            assert(self.n == size(self.X,1),'design matrix does not match Y');
+            self.nfeatures = size(self.Y,2);
+            self.npredictors = size(self.X,2);
+            self.df = self.n - rank(self.X);
+        end
+
+        function cmat = getcovmat(self)
+        % Compute the X covariance matrix if necessary. Otherwise, return
+        % the one stored in self.covmat.
+        % cmat = getcovmat(self)
+            if isempty(self.covmat)
+                self.covmat = inv(self.X' * self.X);
+            end
+            cmat = self.covmat;
+        end
+
+        function mrss = getmrss(self)
+        % Compute the mean residual sum of squares if necessary. Otherwise,
+        % return the one stored in self.mrss.
+            if isempty(self.mrss)
+                resid = self.predictY(self.X) - self.Y;
+                rss = sum(resid.^2);
+                self.mrss = rss / self.df;
+            end
+            mrss = self.mrss;
         end
 
         function Yfit = predictY(self,X)
@@ -68,6 +84,9 @@ classdef GLM < handle
         function t = tmap(self,cv)
         % t = tmap(cv)
         % compute a T contrast for self fit based on contrast vector cv.
+            % make sure we have computed a covariance matrix
+            self.getcovmat;
+            self.getmrss;
             t = self.contrast(cv) ./ sqrt(self.mrss * ...
                 (cv * self.covmat * cv'));
         end
@@ -76,7 +95,7 @@ classdef GLM < handle
         % p = pmap(cv)
         % return one-tailed p values for self fit based on contrast vector
         % cv.
-            p = 1-tcdf(abs(self.tmap(cv)));
+            p = 1-tcdf(abs(self.tmap(cv)),self.df);
         end
     end
 end
