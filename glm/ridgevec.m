@@ -1,19 +1,35 @@
 % Vectorised ridge regression. Almost entirely snatched from Matlab's
 % built-in ridge function but without the arbitrary restrction to only fit
 % a single y per call. As a tradeoff, you can only fit one k per call. For
-% documentation, see ridge.
+% general documentation, see ridge.
 %
-% Note that this function sometimes produces results that are near but not
-% absolutely identical to the Matlab built-in. This problem originates in
-% strange behaviour in Matlab's backslash operator, where the first
-% parameter estimate from  dm\y does not always equal the only estimate
-% from dm\y(:,1). Anyway, any deviations should be extremely subtle.
+% y: data (nsamples by nfeatures)
+% X: design matrix (nsamples by nregressors). No constants!
+% k: ridge parameter (multiplied by n internally). 0 for OLS fit.
+% unscale: (default 1) rescale fit with Z-scored design matrix to original
+%   units (with constant term - gets inserted in last column)
 %
-% b = ridgevec(y,X,k)
-function b = ridgevec(y,X,k)
+% Changes to Matlab's default ridge behaviour:
+% a) unscaling is on by default since this tends to be better for
+% prediction
+% b) the inserted constant term is the LAST regressor, not the first as in
+% ridge
+% c) the ridge parameter (k) is scaled by n (Draper & Smith, 1998). This
+% tends to mean that you don't have to go to extremely large k to see a
+% divergence from the k=0 case.
+%
+% b = ridgevec(y,X,k,[unscale])
+function b = ridgevec(y,X,k,unscale)
+
+if ieNotDefined('unscale')
+    unscale = 1;
+end
 
 % from builtin ridge
 [n,p] = size(X);
+
+% Draper & Smith scaling
+k = k*n;
 
 [n1,collhs] = size(y);
 if n~=n1, 
@@ -26,12 +42,13 @@ wasnan = ((any(isnan(y),2)) | any(isnan(X),2));
 if (any(wasnan))
    y(wasnan,:) = [];
    X(wasnan,:) = [];
-   n = length(y);
 end
 
 % Normalize the columns of X to mean zero, and standard deviation one.
-mx = mean(X);
+mx = mean(X,1);
 stdx = std(X,0,1);
+assert(~any(stdx==0),...
+    'Constant detected. Fit without it and use unscale==1 instead.');
 idx = find(abs(stdx) < sqrt(eps(class(stdx)))); 
 if any(idx)
   stdx(idx) = 1;
@@ -51,4 +68,13 @@ Zplus  = [Z;pseudo];
 yplus  = [y;zeros(p,collhs)];
 
 % and now the b is...
-b = Zplus\yplus;
+b = olsfit(Zplus,yplus);
+
+% Return fit with Z-scored DM to fit from unscaled DM with constant term?
+if unscale
+    % each beta divided by std of design matrix (equivalent to fitting with
+    % constant that is not penalised)
+    b = b ./ repmat(stdx',[1 collhs]);
+    % mean of Y - mean of X (equivalent to constant fit in design matrix)
+    b = [b; mean(y,1)-mx*b];
+end
