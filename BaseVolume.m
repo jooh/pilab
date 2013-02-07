@@ -58,7 +58,8 @@ classdef BaseVolume < handle
         % filter the data in place along the sample dimension (time) with
         % filter size n. Operates separately on each chunk.
             for c = 1:self.desc.samples.nunique.chunks
-                chunkind = self.meta.samples.chunks == self.desc.samples.unique.chunks(c);
+                chunkind = self.meta.samples.chunks == ...
+                    self.desc.samples.unique.chunks(c);
                 self.data(chunkind,:) = medianfilter(...
                     self.data(chunkind,:),n);
             end
@@ -68,9 +69,21 @@ classdef BaseVolume < handle
             % use a Savitzky-Golay filter to detrend the data across time.
             % Operates separately on each chunk
             for c = 1:self.desc.samples.nunique.chunks
-                chunkind = self.meta.samples.chunks == self.desc.samples.unique.chunks(c);
+                chunkind = self.meta.samples.chunks == ...
+                    self.desc.samples.unique.chunks(c);
                 self.data(chunkind,:) = self.data(chunkind,:) - ...
                     sgolayfilt(self.data(chunkind,:),k,f,[],1);
+            end
+        end
+
+        function zscore(self)
+            % Zscore the data across time, operating separately on each
+            % chunk.
+            for c = 1:self.desc.samples.nunique.chunks
+                chunkind = self.meta.samples.chunks == ...
+                    self.desc.samples.unique.chunks(c);
+                self.data(chunkind,:) = zscore(self.data(chunkind,:),[],...
+                    1);
             end
         end
 
@@ -105,12 +118,11 @@ classdef BaseVolume < handle
             end
         end
 
-        function vol = selectbymeta(self,varargin)
-        % convenience method for returning a volume with particular meta
-        % data in samples/features dimension. Assumes that samples and
-        % features are in register. You can pass any number of criteria.
-        % The resulting vol will be the intersection of all.
-        % vol = selectbymeta(self,varargin)
+        function [sampind,featind] = findbymeta(self,varargin)
+        % [sampind,featind] = findbymeta(self,varargin)
+        % return logical indices into samples and features according to
+        % some meta data. Mainly used internally to support selectbymeta
+        % and removebymeta.
             % get possible names
             validsamp = fieldnames(self.meta.samples);
             validfeat = fieldnames(self.meta.features);
@@ -125,6 +137,7 @@ classdef BaseVolume < handle
                 if ieNotDefined(vstr)
                     continue
                 end
+                value = eval(vstr);
                 % check that the field is in samples and is not empty
                 insamp = isfield(self.meta.samples,vstr) && ...
                     ~isempty(self.meta.samples.(vstr));
@@ -134,21 +147,52 @@ classdef BaseVolume < handle
                 % certainly a problem
                 assert(any([insamp infeat]),...
                         'meta data does not exist: %s',vstr)
-                % uh oh, flawed logic here. TODO: fix
                 if insamp
-                    sampind = ismember(self.desc.samples.inds.(vstr),...
-                        eval(vstr)) & sampind;
-                    keyboard;
+                    inds = self.findbyvalue(...
+                        self.meta.samples.(vstr),value);
+                    sampind = sampind & inds;
                 end
                 if infeat
-                    featind = ismember(self.desc.features.inds.(vstr),...
-                        eval(vstr)) & featind;
-                    keyboard;
+                    inds = self.findbyvalue(...
+                        self.meta.features.(vstr),value);
+                    featind = featind & inds;
                 end
             end
+        end
+
+        function vol = selectbymeta(self,varargin)
+        % convenience method for returning a volume with particular meta
+        % data in samples/features dimension. Assumes that samples and
+        % features are in register. You can pass any number of criteria and
+        % any number of values for each criterion.
+        % The resulting vol will be the intersection of all criteria.
+        % vol = selectbymeta(self,varargin)
+            [sampind,featind] = self.findbymeta(varargin{:});
             % convert to subsref format
-            s.type = '()';
-            s.subs = {sampind,featind};
+            s = struct('type','()','subs',{{sampind,featind}});
+            % here we OMIT the first argument which is effectively self,
+            % since basesubsref is a dynamic method. I guess? This is very
+            % puzzling.
+            [dat,meta] = self.basesubsref(s);
+            % finally, use the appropriate, potentially sub-classed copy
+            % method.
+            vol = self.copy(dat,meta);
+        end
+
+        function vol = removebymeta(self,varargin)
+        % convenience method for returning a volume WITHOUT particular meta
+        % data in samples/features dimension. Otherwise similar to
+        % selectbymeta.
+        % vol = removebymeta(self,varargin)
+            [sampind,featind] = self.findbymeta(varargin{:});
+            if ~all(sampind)
+                sampind = ~sampind;
+            end
+            if ~all(featind)
+                featind = ~featind;
+            end
+            % convert to subsref format
+            s = struct('type','()','subs',{{sampind,featind}});
             % here we OMIT the first argument which is effectively self,
             % since basesubsref is a dynamic method. I guess? This is very
             % puzzling.
@@ -234,6 +278,30 @@ classdef BaseVolume < handle
     end
 
     methods(Static)
+        function inds = findbyvalue(array,item)
+            if ischar(item) || (iscell(item) && ischar(item{1}))
+                assert(iscell(array) && isa(array{1},'char'),...
+                    'array must be cell with char entries');
+                if ~iscell(item)
+                    item = {item};
+                end
+                inds = strcmp(item{1},array);
+                % support OR behaviour for multiple inputs
+                for x = 2:length(item)
+                    inds = strcmp(item{x},array) | inds;
+                end
+            elseif isnumeric(item)
+                assert(isnumeric(array),'array must be numeric');
+                inds = item(1) == array;
+                % support OR behaviour for multiple inputs
+                for x = 2:length(item)
+                    inds = (item(x) == array) | inds;
+                end
+            else
+                error('unrecognised input class: %s',class(item));
+            end
+        end
+
         function out = indexstructfields(in,inds)
         % Return a struct where each field has been indexed with the same
         % inds. Used internally to insure that any custom meta data/features
