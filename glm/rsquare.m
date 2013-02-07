@@ -2,6 +2,6 @@
 % R = rsquare(Yfit,Y)
 function R = rsquare(Yfit,Y)
 
-SSerr = sum((Yfit-Y).^2);
-SStot = (length(Y)-1) * var(Y);
+SSerr = sum((Yfit-Y).^2,1);
+SStot = (size(Y,1)-1) .* var(Y);
 R = 1 - (SSerr ./ SStot);
