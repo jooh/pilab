@@ -108,15 +108,17 @@ classdef BaseVolume < handle
         function vol = selectbymeta(self,varargin)
         % convenience method for returning a volume with particular meta
         % data in samples/features dimension. Assumes that samples and
-        % features are in register.
+        % features are in register. You can pass any number of criteria.
+        % The resulting vol will be the intersection of all.
         % vol = selectbymeta(self,varargin)
             % get possible names
             validsamp = fieldnames(self.meta.samples);
             validfeat = fieldnames(self.meta.features);
             valid = union(validsamp,validfeat);
             getArgs(varargin,valid);
-            sampind = false(self.nsamples,1);
-            featind = false(1,self.nfeatures);
+            % begin by assuming you want everything
+            sampind = true(self.nsamples,1);
+            featind = true(1,self.nfeatures);
             for v = valid'
                 vstr = v{1};
                 % skip if not passed as input
@@ -124,31 +126,41 @@ classdef BaseVolume < handle
                     continue
                 end
                 % check that the field is in samples and is not empty
-                insamp = isfield(self.meta.samples.(vstr)) && ...
+                insamp = isfield(self.meta.samples,vstr) && ...
                     ~isempty(self.meta.samples.(vstr));
-                infeat = isfield(self.meta.features.(vstr)) && ...
+                infeat = isfield(self.meta.features,vstr) && ...
                     ~isempty(self.meta.features.(vstr));
                 % if you ask for meta data we can't find this is almost
                 % certainly a problem
                 assert(any([insamp infeat]),...
                         'meta data does not exist: %s',vstr)
+                % uh oh, flawed logic here. TODO: fix
                 if insamp
-                    sampind(ismember(self.desc.samples.inds.(vstr),...
-                        eval(vstr))) = true;
+                    sampind = ismember(self.desc.samples.inds.(vstr),...
+                        eval(vstr)) & sampind;
+                    keyboard;
                 end
                 if infeat
-                    featind(ismember(self.desc.feautres.inds.(vstr),...
-                        eval(vstr))) = true;
+                    featind = ismember(self.desc.features.inds.(vstr),...
+                        eval(vstr)) & featind;
+                    keyboard;
                 end
             end
-            % if you didn't specify any inds, probably you want all
-            if ~any(sampind)
-                sampind(:) = true;
-            end
-            if ~any(featind)
-                featind(:) = true;
-            end
-            vol = self(sampind,featind);
+            % convert to subsref format
+            s.type = '()';
+            s.subs = {sampind,featind};
+            % here we OMIT the first argument which is effectively self,
+            % since basesubsref is a dynamic method. I guess? This is very
+            % puzzling.
+            [dat,meta] = self.basesubsref(s);
+            % finally, use the appropriate, potentially sub-classed copy
+            % method.
+            vol = self.copy(dat,meta);
+        end
+
+        function vol = copy(self,dat,meta)
+            vol = BaseVolume(dat,'metasamples',meta.samples,...
+                'metafeatures',meta.features);
         end
 
         function varargout = subsref(a,s)

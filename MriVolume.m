@@ -299,6 +299,11 @@ classdef MriVolume < BaseVolume
             end
         end
 
+        function vol = copy(self,dat,meta);
+            vol = MriVolume(dat,self.mask,'metasamples',meta.samples,...
+                'metafeatures',meta.features);
+        end
+
         function varargout = subsref(a,s)
         % overloading of round bracket operator.
         % varargout = subsref(a,s)

@@ -102,16 +102,21 @@ classdef Searchlight < handle
             % achieves the desired n
             currentn = self.nwantedvox; %self.lastspheren;
             done = 0;
+            step = 100;
+            niter = 0;
             while ~done
                 % get first n coordinates
                 coords = self.xyz(:,1:currentn);
                 % this search method is accurate but slow
                 out = self.mapsphere(xyz,coords);
                 if self.nvox < self.nwantedvox
-                    currentn = currentn+1;
+                    currentn = currentn+step;
                 elseif self.nvox > self.nwantedvox
-                    error('should not happen')
-                    %currentn = currentn-1;
+                    % overshot the mark. Step back, reduce step size and
+                    % try again
+                    currentn = currentn-step;
+                    assert(step~=1,'should never happen')
+                    step = ceil(step/2);
                 else
                     % must be equal
                     done = 1;
@@ -119,6 +124,8 @@ classdef Searchlight < handle
                     self.radius = self.distances(currentn);
                     self.lastspheren = currentn;
                 end
+                niter = niter+1;
+                assert(niter<10e3,'iteration limit exceeded');
             end
         end
 
