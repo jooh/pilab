@@ -4,17 +4,15 @@
 % general documentation, see ridge.
 %
 % y: data (nsamples by nfeatures)
-% X: design matrix (nsamples by nregressors). No constants!
+% X: design matrix (nsamples by nregressors).
 % k: ridge parameter (multiplied by n internally). 0 for OLS fit.
-% unscale: (default 1) rescale fit with Z-scored design matrix to original
+% unscale: (default 0) rescale fit with Z-scored design matrix to original
 %   units (with constant term - gets inserted in last column)
 %
 % Changes to Matlab's default ridge behaviour:
-% a) unscaling is on by default since this tends to be better for
-% prediction
-% b) the inserted constant term is the LAST regressor, not the first as in
-% ridge
-% c) the ridge parameter (k) is scaled by n (Draper & Smith, 1998). This
+% a) if unscaling, the inserted constant term is the LAST regressor, not
+% the first as in ridge
+% b) the ridge parameter (k) is scaled by n (Draper & Smith, 1998). This
 % tends to mean that you don't have to go to extremely large k to see a
 % divergence from the k=0 case.
 %
@@ -22,18 +20,16 @@
 function b = ridgevec(y,X,k,unscale)
 
 if ieNotDefined('unscale')
-    unscale = 1;
+    unscale = 0;
 end
 
-% from builtin ridge
 [n,p] = size(X);
-
 % Draper & Smith scaling
 k = k*n;
 
 [n1,collhs] = size(y);
 if n~=n1, 
-    error('stats:ridge:InputSizeMismatch',...
+    error('ridgevec:InputSizeMismatch',...
           'The number of rows in Y must equal the number of rows in X.'); 
 end 
 
@@ -47,6 +43,7 @@ end
 % Normalize the columns of X to mean zero, and standard deviation one.
 mx = mean(X,1);
 stdx = std(X,0,1);
+% catch bad user behaviour
 assert(~any(stdx==0),...
     'Constant detected. Fit without it and use unscale==1 instead.');
 idx = find(abs(stdx) < sqrt(eps(class(stdx)))); 
