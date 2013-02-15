@@ -127,10 +127,8 @@ classdef MriVolume < BaseVolume
                     end
                     datamat = thisdata.data;
                     % update meta
-                    vol.meta.samples = vol.appendstructfields(...
-                        vol.meta.samples,thisdata.meta.samples,1);
-                    vol.meta.features = vol.appendstructfields(...
-                        vol.meta.features,thisdata.meta.features,2);
+                    vol.appendmetasamples(thisdata.meta.samples);
+                    vol.appendmetafeatures(thisdata.meta.features);
                     % also bring along the mask if possible and needed
                     if isempty(vol.mask) && ~isempty(thisdata.mask)
                         vol.mask = thisdata.mask;

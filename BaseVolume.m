@@ -29,11 +29,54 @@ classdef BaseVolume < handle
             if nargin==0
                 return
             end
-            assert(ndims(data)==2,...
-                'input data must be nsamples by nfeatures matrix');
-            vol.data = data;
-            [vol.nsamples,vol.nfeatures] = size(data);
             vol.initialisemeta(varargin{:});
+            if ~iscell(data)
+                data = {data};
+            end
+            for d = 1:length(data)
+                thisdata = data{d};
+                if isa(thisdata,'BaseVolume')
+                    datamat = thisdata.data;
+                    % update meta
+                    vol.appendmetasamples(thisdata.meta.samples);
+                    % don't concatenate features - test if matched.
+                    vol.appendmetafeatures(thisdata.meta.features);
+                    if isempty(vol.frameperiod)
+                        vol.frameperiod = thisdata.frameperiod;
+                    else
+                        assert(vol.frameperiod == thisdata.frameperiod,...
+                            'data with different frameperiod');
+                    end
+                else
+                    % assume raw matrix
+                    datamat = thisdata;
+                end
+                if isempty(datamat)
+                    continue
+                end
+                % parse the data
+                tdsize = size(datamat);
+                dtype = class(datamat);
+                % initialise with class of first data. Helps conserve
+                % memory if you are using a lower precision datatype
+                % (otherwise the concatenation operation upcasts all data
+                % to double)
+                if isempty(vol.data)
+                    vol.data = feval(dtype,[]);
+                end
+                % it had best be a n by nfeatures matrix (if we
+                % know nfeatures)
+                if isempty(vol.nfeatures) || vol.nfeatures==0
+                    % otherwise, set nfeatures by data
+                    vol.nfeatures = tdsize(2);
+                else
+                    assert(tdsize(2)==vol.nfeatures,...
+                    'received 2D data with bad shape');
+                end
+                vol.data = [vol.data; datamat];
+            end
+            vol.nsamples = size(vol.data,1);
+            % analyse the standard descriptives
             vol.checkmeta;
         end
 
@@ -277,6 +320,27 @@ classdef BaseVolume < handle
             o = vertcat(varargin{:});
         end
 
+        function appendmetafeatures(self,new)
+        % Update each entry in meta.features recursively. Test for
+        % mismatched meta features.
+        % appendmetafeatures(new)
+            self.meta.features = self.parsemeta(self.meta.features,new,...
+                @self.testfeatures);
+        end
+
+        function appendmetasamples(self,new)
+        % Update each entry in meta.samples recursively by concatenation.
+        % appendmetasamples(new)
+            metaoperate = @(x,y) cat(1,x,y);
+            self.meta.samples = self.parsemeta(self.meta.samples,new,...
+                metaoperate);
+        end
+
+        function org = testfeatures(self,org,new)
+        % test function to support appendmetafeatures.
+        % org = testfeatures(org,new)
+            assert(isequal(org,new),'mismatched features!')
+        end
     end
 
     methods(Static)
@@ -322,11 +386,12 @@ classdef BaseVolume < handle
             out = catstruct(validdata, emptydata);
         end
 
-        function org = appendstructfields(org,new,dim)
-        % Return a struct where the consistent fields between org and new
-        % have been appended (rather than the last overwriting the first as
-        % in catstruct). Recurses into sub-fields.
-        % org = appendstructfields(org,new,dim)
+        function org = parsemeta(org,new,metaoperate)
+        % internal method for iterating recursively over data in nested
+        % struct arrays. metaoperate is a function handle that gets applied
+        % to data. Used to support appendmetafeatures and
+        % appendmetasamples.
+        % org = parsemeta(org,new,metaoperate)
             orgfields = fieldnames(org);
             newfields = fieldnames(new);
             % fields that need updating
@@ -336,10 +401,16 @@ classdef BaseVolume < handle
                 tstr = t{1};
                 if isstruct(org.(tstr))
                     % recurse into sub-fields
-                    org.(tstr) = appendstructfields(org.(tstr),...
-                        new.(tstr),dim);
+                    org.(tstr) = parsemeta(org.(tstr),...
+                        new.(tstr),metaoperate);
                 else
-                    org.(tstr) = cat(dim,org.(tstr),new.(tstr));
+                    % if we don't have it, assume we need it
+                    if isempty(org.(tstr))
+                        org.(tstr) = new.(tstr);
+                    elseif ~isempty(new.(tstr))
+                        % if there is some new data to process
+                        org.(tstr) = metaoperate(org.(tstr),new.(tstr));
+                    end
                 end
             end
             % fields that need to be added
