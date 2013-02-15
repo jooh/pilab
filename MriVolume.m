@@ -141,6 +141,12 @@ classdef MriVolume < BaseVolume
                             vol.voxsize = vox2mm(vol.header);
                         end
                     end
+                    if isempty(vol.frameperiod)
+                        vol.frameperiod = thisdata.frameperiod;
+                    else
+                        assert(vol.frameperiod == thisdata.frameperiod,...
+                            'data with different frameperiod');
+                    end
                 else
                     % assume headerless data
                     datamat = thisdata;
@@ -301,7 +307,8 @@ classdef MriVolume < BaseVolume
 
         function vol = copy(self,dat,meta);
             vol = MriVolume(dat,self.mask,'metasamples',meta.samples,...
-                'metafeatures',meta.features);
+                'metafeatures',meta.features,'header',self.header,...
+                'frameperiod',self.frameperiod);
         end
 
         function varargout = subsref(a,s)
@@ -321,7 +328,8 @@ classdef MriVolume < BaseVolume
                     end
                     % make a new instance
                     varargout{1} = MriVolume(dat,mask,'metasamples',meta.samples,...
-                        'metafeatures',meta.features,'header',a.header);
+                        'metafeatures',meta.features,'header',a.header,...
+                        'frameperiod',a.frameperiod);
                 otherwise
                     % revert to builtin behaviour
                     try
