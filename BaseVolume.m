@@ -20,6 +20,7 @@ classdef BaseVolume < handle
         desc = struct('samples',[],'features',[]); % summaries of meta
         standardstruct = struct('labels',{{}},'chunks',[],...
                 'names',{{}},'order',[]);
+        frameperiod % recording rate (s)
     end
 
     methods
@@ -44,8 +45,9 @@ classdef BaseVolume < handle
                 'uniformoutput',false);
             standardfields = fieldnames(self.standardstruct);
             getArgs(varargin,{'metasamples',self.standardstruct,...
-                'metafeatures',self.standardstruct},'verbose=0',...
-                'suppressUnknownArgMessage=1');
+                'metafeatures',self.standardstruct,'frameperiod',[]},...
+                'verbose=0','suppressUnknownArgMessage=1');
+            self.frameperiod = frameperiod;
             % insure meta samples and features contain mandatory
             % fields from self.standardstruct
             self.meta.samples = catstruct(self.standardstruct,metasamples);
@@ -204,7 +206,7 @@ classdef BaseVolume < handle
 
         function vol = copy(self,dat,meta)
             vol = BaseVolume(dat,'metasamples',meta.samples,...
-                'metafeatures',meta.features);
+                'metafeatures',meta.features,'frameperiod',self.frameperiod);
         end
 
         function varargout = subsref(a,s)
@@ -215,7 +217,7 @@ classdef BaseVolume < handle
                     [dat,meta] = basesubsref(a,s);
                     % make a new instance
                     varargout{1} = BaseVolume(dat,'metasamples',meta.samples,...
-                        'metafeatures',meta.features);
+                        'metafeatures',meta.features,'frameperiod',self.frameperiod);
                 otherwise
                     % revert to builtin behaviour
                     try
