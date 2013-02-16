@@ -16,7 +16,10 @@ classdef RidgeGLM < CovGLM
         end
 
         function estimates = fit(self)
-            estimates = ridgevec(self.data,self.X,self.k);
+            assert(all(self(1).k==[self.k]),...
+                'all runs must have the same ridge parameter k.');
+            estimates = ridgevec(vertcat(self.data),vertcat(self.X),...
+                self(1).k);
         end
     end
 end
