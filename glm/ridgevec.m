@@ -10,8 +10,7 @@
 %   units (with constant term - gets inserted in last column)
 %
 % Changes to Matlab's default ridge behaviour:
-% a) if unscaling, the inserted constant term is the LAST regressor, not
-% the first as in ridge
+% a) unscaling is on, but no constant term is added
 % b) the ridge parameter (k) is scaled by n (Draper & Smith, 1998). This
 % tends to mean that you don't have to go to extremely large k to see a
 % divergence from the k=0 case.
@@ -20,7 +19,7 @@
 function b = ridgevec(y,X,k,unscale)
 
 if ieNotDefined('unscale')
-    unscale = 0;
+    unscale = 1;
 end
 
 [n,p] = size(X);
@@ -73,5 +72,4 @@ if unscale
     % constant that is not penalised)
     b = b ./ repmat(stdx',[1 collhs]);
     % mean of Y - mean of X (equivalent to constant fit in design matrix)
-    b = [b; mean(y,1)-mx*b];
 end
