@@ -121,6 +121,15 @@ classdef BaseVolume < handle
             end
         end
 
+        function sgfilter(self,k,f)
+            for c = 1:self.desc.samples.nunique.chunks
+                chunkind = self.meta.samples.chunks == ...
+                    self.desc.samples.unique.chunks(c);
+                self.data(chunkind,:) = sgolayfilt(...
+                    self.data(chunkind,:),k,f,[],1);
+            end
+        end
+
         function zscore(self)
             % Zscore the data across time, operating separately on each
             % chunk.
@@ -343,7 +352,7 @@ classdef BaseVolume < handle
         end
     end
 
-    methods(Static)
+    methods(Static = true)
         function inds = findbyvalue(array,item)
             if ischar(item) || (iscell(item) && ischar(item{1}))
                 assert(iscell(array) && isa(array{1},'char'),...
@@ -420,6 +429,5 @@ classdef BaseVolume < handle
                 org.(tstr) = new.(tstr);
             end
         end
-
     end
 end
