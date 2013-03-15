@@ -193,13 +193,14 @@ classdef GLM < handle
             end
         end
 
-        function [estimates,sterrs] = bootstrapestimate(self,nboot)
+        function [estimates,sterrs,bootest] = bootstrapestimate(self,nboot)
         % estimate a bootstrap distribution by drawing nboot samples with
         % replacement from the available runs in self. Return the median of
-        % the bootstrap estimates and half of the 68% range (ie, standard
-        % error).
+        % the bootstrap estimates, half of the 68% range (ie, an
+        % estimate of standard error), and the raw distribution of
+        % bootstraps
         %
-        % [estimates,sterrs] = bootstrapestimate(nboot)
+        % [estimates,sterrs,bootest] = bootstrapestimate(nboot)
             n = numel(self);
             bootest = NaN([self(1).npredictors self(1).nfeatures nboot]);
             parfor b = 1:nboot
