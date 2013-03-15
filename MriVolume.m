@@ -116,6 +116,12 @@ classdef MriVolume < BaseVolume
                         vol.header = dV;
                         vol.voxsize = vox2mm(vol.header);
                     end
+                    % initialise an all-on mask based on data size
+                    if isempty(vol.mask)
+                        vol.mask = true(size(spm_read_vols(dV(1))));
+                        vol.linind = find(vol.mask)';
+                        vol.xyz = vol.linind2coord(vol.linind);
+                    end
                     datamat = spm_get_data(dV,vol.xyz);
                     volnames = {dV.fname}';
                 elseif isa(thisdata,'MriVolume')
