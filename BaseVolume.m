@@ -426,7 +426,8 @@ classdef BaseVolume < handle
             trulynew = setdiff(newfields,orgfields)';
             for n = trulynew
                 nstr = n{1};
-                org.(tstr) = new.(tstr);
+                % AAAAAH
+                org.(nstr) = new.(nstr);
             end
         end
     end
