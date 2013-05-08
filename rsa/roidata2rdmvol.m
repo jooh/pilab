@@ -34,7 +34,8 @@ else
     coords = cell(1,rois.nsamples);
     for c = 1:rois.nsamples
         % compute centre of mass for this ROI
-        coords{c} = round(mean(rois.linind2coord(rois.linind(rois.data(c,:))),2));
+        coords{c} = round(mean(rois.linind2coord(rois.linind(...
+            rois.data(c,:)~=0)),2));
     end
     % make a mask-less volume 
     disvol = MriVolume(dissimilarities,[],'metafeatures',struct(...
