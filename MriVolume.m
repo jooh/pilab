@@ -281,6 +281,10 @@ classdef MriVolume < BaseVolume
         % using a gaussian filter with fwhm mm. Smoothing is done in the
         % original 3D shape of the volume and the mask is re-applied after
         % smoothing.
+            if fwhm==0
+                % quick and easy
+                return
+            end
             sigma = fwhm / sqrt(8*log(2));
             % configure filter
             % convert fwhm to standard deviation of gaussian
