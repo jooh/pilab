@@ -12,13 +12,22 @@ end
 dissimilarities = NaN([nchoosek(vol.desc.samples.nunique.labels,2) ...
     rois.nsamples]);
 
+% now mask out any NaN features
+nanmask = ~any(isnan(vol.data),1);
+% if you haven't NaNed out all conditions for a given feature something is
+% likely broken
+assert(all(all(isnan(vol.data(:,~nanmask)))),'inconsistent NaN mask detected');
+if ~all(nanmask)
+    fprintf('removed %d NaN features from analysis.\n',sum(~nanmask));
+end
+
 % compute result
 parfor n = 1:rois.nsamples
     % skip empty rois (these come out as NaN)
     if ~any(rois.data(n,:))
         continue
     end
-    dissimilarities(:,n) = pdist(vol.data(:,full(rois.data(n,:)~=0)),distancemetric);
+    dissimilarities(:,n) = pdist(vol.data(:,full(rois.data(n,:)~=0)&nanmask),distancemetric);
 end
 
 % convert to volume - here it is a problem that the result may have
@@ -32,13 +41,15 @@ else
     % complicated case - need to forget the mask and write out a mask-less
     % volume. But save coordinates of ROIs to enable sanity checks later
     coords = cell(1,rois.nsamples);
+    nvox = NaN([1 rois.nsamples]);
     for c = 1:rois.nsamples
         % compute centre of mass for this ROI
         coords{c} = round(mean(rois.linind2coord(rois.linind(...
             rois.data(c,:)~=0)),2));
+        nvox(c) = sum(rois.data(c,:)~=0);
     end
     % make a mask-less volume 
     disvol = MriVolume(dissimilarities,[],'metafeatures',struct(...
-        'names',{rois.meta.samples.names},'centreofmass',{coords}),...
-        'header',rois.header);
+        'names',{rois.meta.samples.names'},'centreofmass',{coords},...
+        'nfeatures',nvox),'header',rois.header);
 end
