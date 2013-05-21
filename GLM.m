@@ -54,16 +54,16 @@ classdef GLM < handle
         % residuals of (self-) fitted responses on data.
         %
         % r = residuals()
-            r = self.predictY(vertcat(self.X)) - vertcat(self.data);
+            r = predictY(self,vertcat(self.X)) - vertcat(self.data);
         end
 
         function mr = mrss(self)
         % return the mean residual sum of squares (calculated over df).
         %
         % mr = mrss()
-            resid = self.residuals;
+            resid = residuals(self);
             rss = sum(resid.^2);
-            mr = rss / self.df;
+            mr = rss / df(self);
         end
 
         function Yfit = predictY(self,varargin)
@@ -71,23 +71,39 @@ classdef GLM < handle
         % Uses varargin to support combining multiple design matrix inputs
         % at once.
         %
+        % if no inputs are provided we assume you want a self fit.
+        %
         % Yfit = predictY(X,[X],[X etc...])
-            X = vertcat(varargin{:});
-            Yfit = X * self.fit;
+            if nargin > 1                
+                X = vertcat(varargin{:});
+            else
+                X = vertcat(self.X);
+            end
+            Yfit = X * fit(self);
         end
 
         function mse = mserr(self,Yfit)
         % mean squared error between predicted responses in Yfit and
         % current data.
         %
+        % if no inputs are provided we assume you want a self fit.
+        %
         % mse = mserr(Yfit)
+            if nargin == 1 
+                Yfit = predictY(self);
+            end
             mse = mean((Yfit-vertcat(self.data)).^2);
         end
 
         function R = rsquare(self,Yfit)
         % R^2 between predicted responses in Yfit and current data.
         %
+        % if no inputs are provided we assume you want a self fit.
+        %
         % R = rsquare(Yfit)
+            if nargin == 1
+                Yfit = predictY(self);
+            end
             R = rsquare(Yfit,vertcat(self.data));
         end
 
@@ -97,15 +113,15 @@ classdef GLM < handle
         % con = contrast(cv)
             assert(ndims(cv)==2 && all(size(cv)==[1 self(1).npredictors]),...
                 'contrast vector must be 1 by npredictors');
-            con = cv * self.fit;
+            con = cv * fit(self);
         end
 
         function t = tmap(self,cv)
         % compute a T contrast for self fit based on contrast vector cv.
         %
         % t = tmap(cv)
-            t = self.contrast(cv) ./ sqrt(self.mrss * ...
-                (cv * self.covmat * cv'));
+            t = contrast(self,cv) ./ sqrt(mrss(self) * ...
+                (cv * covmat(self) * cv'));
         end
 
         function p = pmap(self,cv)
@@ -113,7 +129,7 @@ classdef GLM < handle
         % cv.
         %
         % p = pmap(cv)
-            p = 1-tcdf(abs(self.tmap(cv)),self.df);
+            p = 1-tcdf(abs(tmap(self,cv)),df(self));
         end
 
         function [winners,meds] = crossvalidateparameter(self,parameter,values,metric)
@@ -138,7 +154,7 @@ classdef GLM < handle
                 % set parameter in train and test
                 [self.(parameter)] = deal(values(v));
                 % cross-validate fit with chosen parameter
-                splitres = self.crossvalidatefit(metric);
+                splitres = crossvalidatefit(self,metric);
                 % update with median across splits
                 meds(v,:) = median(splitres,1);
             end
@@ -175,6 +191,7 @@ classdef GLM < handle
                     'uniformoutput',false));
             end
             nsplits = size(splits,1);
+            assert(nsplits > 1,'can only crossvalidate if >1 run');
             nfeatures = self(1).nfeatures;
             splitres = NaN([nsplits nfeatures]);
             parfor s = 1:nsplits
@@ -182,38 +199,64 @@ classdef GLM < handle
                 train = ~splits(s,:);
                 switch metric
                     case 'r2'
-                        splitres(s,:) = self(test).rsquare(...
-                            self(train).predictY(self(test).X));
+                        splitres(s,:) = rsquare(self(test),...
+                            predictY(self(train),self(test).X));
                     case 'mse'
-                        splitres(s,:) = self(test).mserr(...
-                            self(train).predictY(self(test).X));
+                        splitres(s,:) = mserr(self(test),...
+                            predictY(self(train),self(test).X));
                     otherwise
                         error('unknown metric: %s',metric);
                 end
             end
         end
 
-        function [estimates,sterrs,bootest] = bootstrapestimate(self,nboot)
-        % estimate a bootstrap distribution by drawing nboot samples with
-        % replacement from the available runs in self. Return the median of
-        % the bootstrap estimates, half of the 68% range (ie, an
-        % estimate of standard error), and the raw distribution of
-        % bootstraps
+        function [estimates,sterrs,bootest] = bootstraprunfit(self,nboot)
+        % draw nboot samples with replacement from the available runs in
+        % self. Return the median and standard error of the model fit. Uses
+        % the bootstrapruns method internally - see GLM.bootstrapruns for
+        % details.
         %
-        % [estimates,sterrs,bootest] = bootstrapestimate(nboot)
+        % Return the median of the bootstrap estimates, half of the
+        % 68% range (ie, an estimate of standard error), and the raw
+        % distribution of bootstraps.
+        % [estimates,sterrs,bootest] = bootstrapfit(self,nboot)
+            bootest = bootstrapruns(self,nboot,'fit',...
+                [self(1).npredictors,self(1).nfeatures]);
+            % get percentile
+            [estimates,sterrs] = bootprctile(bootest);
+        end
+
+        function bootest = bootstrapruns(self,nboot,bootmeth,outshape)
+        % general method for computing bootstrap estimates for some
+        % bootmeth (char - must refer to a method of the current instance
+        % which takes no input arguments and returns at least one output).
+        % outshape defines the dimensionality of the bootest
+        % matrix ([row column]).
+        %
+        % we draw nboot samples with replacement from the available runs in
+        % self.
+        %
+        % if you leave outshape undefined we hit bootmeth once to figure
+        % out what the desired shape is. This convenience comes at a
+        % performance cost.
+        %
+        % bootest = bootstrapruns(self,nboot,bootmeth,[outshape])
             n = numel(self);
-            bootest = NaN([self(1).npredictors self(1).nfeatures nboot]);
+            if ieNotDefined('outshape')
+                % this is a little ugly but we can simply run bootmeth once
+                % to see what the output looks like
+                outshape = size(self.(bootmeth));
+                assert(numel(outshape)<3,...
+                    'bootmeth must return at most 2d outputs, got %s',...
+                    mat2str(outshape));
+            end
+            bootest = NaN([outshape nboot]);
             parfor b = 1:nboot
                 %fprintf('%d ',b)
                 % draw random sample with replacement
                 inds = ceil(rand(n,1)*n);
-                bootest(:,:,b) = self(inds).fit;
+                bootest(:,:,b) = self(inds).(bootmeth);
             end
-            % use percentile method to find median and half of 68% range
-            % (ie standard error) (from KK's GLMestimatemodel)
-            percs = prctile(bootest,[16 50 84],3);
-            estimates = percs(:,:,2);
-            sterrs = diff(percs(:,:,[1 3]),1,3)/2;
         end
     end
 end
