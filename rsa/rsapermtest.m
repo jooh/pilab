@@ -35,6 +35,8 @@ if ~all(ok)
     b = b(ok,ok,:);
 end
 
+assert(~any(isnan(b(:))),'nans detected in data');
+
 % rank transform for speed (no need to recompute on each iteration)
 a = tiedrank(asrdmvec(a));
 b = tiedrank(asrdmvec(b));
