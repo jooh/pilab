@@ -29,15 +29,17 @@ ok = ~all(isnan(amat),1);
 if ~all(ok)
     % shrink a and b down to size
     a = asrdmmat(a);
-    a = a(ok,ok,:);
     b = asrdmmat(b);
+    assert(size(a,1)==size(b,1),'different size rdms detected');
+    a = a(ok,ok,:);
     b = b(ok,ok,:);
 end
 
 % rank transform for speed (no need to recompute on each iteration)
 a = tiedrank(asrdmvec(a));
 b = tiedrank(asrdmvec(b));
-ncon = npairs2n(length(a));
+ncon = npairs2n(size(a,1));
+assert(ncon == npairs2n(size(b,1)),'different size rdms detected');
 ndata = size(b,2);
 
 npossible = factorial(ncon);
