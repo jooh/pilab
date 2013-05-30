@@ -24,7 +24,7 @@ end
 % compute result
 parfor n = 1:rois.nsamples
     % skip empty rois (these come out as NaN)
-    if ~any(rois.data(n,:))
+    if ~any(rois.data(n,:)&nanmask)
         continue
     end
     dissimilarities(:,n) = pdist(vol.data(:,full(rois.data(n,:)~=0)&nanmask),distancemetric);
