@@ -81,8 +81,10 @@ b = makevector(b);
 a = makevector(a);
 assert(~any(isnan(b(:))),'nans detected in data');
 % rank transform for speed (no need to recompute on each iteration)
-a = tiedrank(a);
-b = tiedrank(b);
+% single because after rank transform there's very little precision anyway,
+% so why not cut ram use in half...
+a = single(tiedrank(a));
+b = single(tiedrank(b));
 assert(isequal(size(a,1),size(b,1)),'different size rdms detected');
 nfeatures = size(b,2);
 
@@ -113,8 +115,8 @@ else
     permcols = permrows;
 end
 
-% preallocate
-nulldist = NaN([nperms nfeatures]);
+% preallocate (single to avoid parfor problems)
+nulldist = NaN([nperms nfeatures],'single');
 
 % compute true statistic
 % (nb we use pearsonvec on ranks which is equivalent to spearman but faster
