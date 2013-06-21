@@ -29,74 +29,115 @@ end
 % set diagonal to NaN to make the next test easier
 amat(logical(eye(size(amat,1)))) = NaN;
 ok = ~all(isnan(amat),1);
+% test for asymmetries in nans
+assert(all(ok==~all(isnan(amat),2)'),['detected different nans in ' ... 
+    'rows and columns of a - asymmetrical rdm?']);
+% enforce matrix form
+a = asrdmmat(a);
+b = asrdmmat(b);
+% remove nan'ed rows/columns
 if ~all(ok)
     % shrink a and b down to size
-    a = asrdmmat(a);
-    b = asrdmmat(b);
     assert(size(a,1)==size(b,1),'different size rdms detected');
     a = a(ok,ok,:);
     b = b(ok,ok,:);
 end
+ncon = size(a,1);
 
-assert(~any(isnan(b(:))),'nans detected in data');
+% by default we use the stock rsa conversions between square and vector
+% forms (basically squareform)
+makevector = @(rdm) rdm2vec(rdm);
+makerdmmat = @(rdvec) vec2rdm(rdvec);
+splitdatamode = false;
 
-% rank transform for speed (no need to recompute on each iteration)
-a = tiedrank(asrdmvec(a));
-b = tiedrank(asrdmvec(b));
-ncon = npairs2n(size(a,1));
-assert(ncon == npairs2n(size(b,1)),'different size rdms detected');
-ndata = size(b,2);
-
-npossible = factorial(ncon);
-assert(nperms<=npossible,...
-    'requested %d permutations but only %d are possible',nperms,npossible);
-
-% find row/column indices for each permutation
-if ncon<=10
-    % extra operation to put the unpermuted entry first
-    perminds = (ncon+1) - perms(1:ncon);
-    % strip out original (to be reinserted later)
-    perminds(1,:) = [];
-    % randomise order
-    perminds = perminds(randperm(npossible-1),:);
-    % and restrict to nperms (keeping original as 1)
-    perminds = perminds(1:nperms-1,:);
-else
-    % not enough memory to generate all perms so just draw randoms
-    done = 0;
-    while ~done
-        perminds = cell2mat(arrayfun(@randperm,ones(nperms-1,1)*ncon,...
-            'uniformoutput',false));
-        % it is usually exceedingly unlikely, but just out of paranoia we
-        % will make sure that we don't draw the same perm twice, and that
-        % the perms don't include the original
-        if (size(unique(perminds,'rows'),1)==(nperms-1)) && ...
-                isempty(intersect(perminds,1:ncon,'rows'))
-            done = 1;
-        end
+% detect remaining NaNs in model
+if any(isnan(a(:)))
+    if issplitdatardm(a)
+        splitdatamode = true;
+        fprintf(['split data RDM detected, switching to row and column '...
+            'permutation test\n']);
+        % split data RDM test mode
+        % reduce model to split RDM part
+        % update ncon
+        ncon = size(a,1)/2;
+        % number of pairs for split data case (not nchoosek(x,2))
+        npairs = ncon^2;
+        rowinds = ncon+1:ncon*2;
+        colinds = 1:ncon;
+        a = a(rowinds,colinds);
+        % also data
+        b = b(rowinds,colinds,:);
+        % switch vectorisation function to use reshape (to include
+        % diagonal)
+        makevector = @(rdm) reshape(rdm,[npairs size(rdm,3)]);
+        makerdmmat = @(rdvec) reshape(rdvec,[ncon ncon size(rdvec,2)]);
+        % switch permutation mode to row/columns
+    else
+        % some other NaNs in model - probably user error
+        error('non-row/column NaNs in non-split data model RDM');
     end
 end
-% return original perm
-perminds = [1:ncon; perminds];
+
+% both back to vector - either unique off-diagonals or everything if split
+% data
+b = makevector(b);
+a = makevector(a);
+assert(~any(isnan(b(:))),'nans detected in data');
+% rank transform for speed (no need to recompute on each iteration)
+a = tiedrank(a);
+b = tiedrank(b);
+assert(isequal(size(a,1),size(b,1)),'different size rdms detected');
+nfeatures = size(b,2);
+
+npossible = factorial(ncon);
+if npossible < nperms
+    warning(['requested %d permutations but only %d are possible - ' ...
+        'skipping permutation test.'],nperms,npossible);
+    nperms = 1;
+end
+
+permrows = permuteindices(ncon,nperms);
+if splitdatamode
+    % for split data we permute rows and columns separately
+    done = false;
+    niter = 0;
+    while ~done
+        permcols = permuteindices(ncon,nperms);
+        % toss symmetrical row/column permutations 
+        if nperms==1 || ~any(all(permcols(2:end,:)==permrows(2:end,:),2))
+            done = true;
+        end
+        niter = niter + 1;
+        assert(niter < 1e5,'no valid row/column permutations found');
+    end
+else
+    % for non-split data we permute rows and columns in concert to preserve
+    % diagonal symmetry
+    permcols = permrows;
+end
 
 % preallocate
-nulldist = NaN([nperms ndata]);
+nulldist = NaN([nperms nfeatures]);
 
 % compute true statistic
 % (nb we use pearsonvec on ranks which is equivalent to spearman but faster
 % since rank transform is only done once for b)
 r = pearsonvec(a,b);
-% return a to mat form for permuting
-a = vec2rdm(a);
 nulldist(1,:) = r;
+% return a to mat form for permuting
+a = makerdmmat(a);
 % predefine column indices to prevent parfor problems
-inds = 1:ndata;
-% todo: parfor
+inds = 1:nfeatures;
 parfor p = 2:nperms
     % vector form of permuted a
-    aperm = rdm2vec(a(perminds(p,:),perminds(p,:)));
+    aperm = makevector(a(permrows(p,:),permcols(p,:)));
     nulldist(p,inds) = pearsonvec(aperm,b);
 end
 
 % get p for each RDM
-p = sum(nulldist >= repmat(r,[nperms 1]),1) ./ nperms;
+if nperms>1
+    p = sum(nulldist >= repmat(r,[nperms 1]),1) ./ nperms;
+else
+    p = NaN(size(r));
+    nulldist(:) = NaN;
+end

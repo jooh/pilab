@@ -10,7 +10,7 @@
 %   units (with constant term - gets inserted in last column)
 %
 % Changes to Matlab's default ridge behaviour:
-% a) unscaling is on, but no constant term is added
+% a) if unscaling is off, no constant term is added
 % b) the ridge parameter (k) is scaled by n (Draper & Smith, 1998). This
 % tends to mean that you don't have to go to extremely large k to see a
 % divergence from the k=0 case.
@@ -19,7 +19,7 @@
 function b = ridgevec(y,X,k,unscale)
 
 if ieNotDefined('unscale')
-    unscale = 1;
+    unscale = 0;
 end
 
 [n,p] = size(X);

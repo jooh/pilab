@@ -13,7 +13,8 @@ if r ~= c
 end
 
 % 0 diagonal for all RDMs (stacked in 3rd dim)
-if ~all(rdm(repmat(logical(eye(r)),[1 1 z]))==0);
+diagonals = rdm(repmat(logical(eye(r)),[1 1 z]));
+if ~all(diagonals==0) && ~all(diagonals==1)
     yes = false;
     return
 end
