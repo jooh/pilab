@@ -18,16 +18,20 @@ nanmask = ~any(isnan(vol.data),1);
 % likely broken
 assert(all(all(isnan(vol.data(:,~nanmask)))),'inconsistent NaN mask detected');
 if ~all(nanmask)
-    fprintf('removed %d NaN features from analysis.\n',sum(~nanmask));
+    nnans = sum(~nanmask);
+    fprintf(['removed %d NaN features from analysis ' ...
+        '(%.2f%% of total).\n'],nnans,...
+        100*(nnans/length(nanmask)));
 end
 
 % compute result
 parfor n = 1:rois.nsamples
     % skip empty rois (these come out as NaN)
-    if ~any(rois.data(n,:)&nanmask)
+    validvox = full(rois.data(n,:)~=0)&nanmask;
+    if ~any(validvox)
         continue
     end
-    dissimilarities(:,n) = pdist(vol.data(:,full(rois.data(n,:)~=0)&nanmask),distancemetric);
+    dissimilarities(:,n) = pdist(vol.data(:,validvox),distancemetric);
 end
 
 % convert to volume - here it is a problem that the result may have
