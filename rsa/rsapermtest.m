@@ -23,6 +23,9 @@ end
 % off-diagonal entries are NaN). It doesn't make sense to permute empty
 % rows/columns.
 amat = asrdmmat(a);
+if ~isa(amat,'double')
+    amat = double(amat);
+end
 % set diagonal to NaN to make the next test easier
 amat(logical(eye(size(amat,1)))) = NaN;
 ok = ~all(isnan(amat),1);
