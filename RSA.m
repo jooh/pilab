@@ -10,16 +10,35 @@ classdef RSA < GLM
 
     methods
         function gl = RSA(modelrdms,datardms)
-            % store unaltered data in matrix form (for e.g. bootstrapping)
+            % store data in matrix form (for e.g. bootstrapping)
             Xrdm = asrdmmat(modelrdms);
             datardm = asrdmmat(datardms);
-            ncon = size(Xrdm,1);
+            [ncon,ncon,npred] = size(Xrdm);
+            % handle NaN content
+            nanx = isnan(Xrdm);
+            % first drop any conditions that are all NaNs (ie, all
+            % row/columns). For this, it's convenient to set the diagonal
+            % to true as well
+            nanx(repmat(logical(eye),[1 1 size(Xrdm,3)])) = true;
+            goodcon = arrayfun(@(x)~all(nanx(:,:,x),2),...
+                1:npredictors,'uniformoutput',false);
+            % nan conditions must be consistent across predictors
+            assert(isequal(goodcon{:}),['inconsistent nan rows across '...
+                'predictors']);
+            % reduce to valid cons
+            Xrdm = Xrdm(goodcon{1},goodcon{1},:);
+            datardm = datardm(goodcon{1},goodcon{1},:);
+            assert(~any(isnan(Xrdm(:))),...
+                'non row/condition NaNs in model RDMs are not supported');
+            assert(~any(isnan(datardm(:))),...
+                'non row/condition NaNs in data RDMs are not supported');
             % convert to vector and strip NaNs
             Xvec = rdm2vec(Xrdm);
             datavec = rdm2vec(datardm);
             nanmask = any(isnan(Xvec),2) | any(isnan(datavec),2);
             Xvec(nanmask,:) = [];
             datavec(nanmask,:) = [];
+            % TODO
             assert(~isempty(Xvec),'no valid (non-NaN) data entered');
             % use super-class to initialise            
             gl = gl@GLM(Xvec,datavec);
@@ -31,16 +50,17 @@ classdef RSA < GLM
             % does nothing for base RSA case.
         end
 
-        function permglm = permuteconditions(self)
+        function permglm = permuteconditions(self,coninds)
         % return a new instance where the rows and columns in the Xrdm
         % have been permuted without replacement.
         %
-        % permglm = permuteconditions()
+        % permglm = permuteconditions(coninds)
             xtemp = self.Xrdm;
             % set diagonal to NaN to make the check easier
             xtemp(repmat(logical(eye(self.ncon)),...
                 [1 1 self.npredictors])) = NaN;
             xnan = isnan(xtemp);
+            % find conditions that are NaN
             goodcons = arrayfun(@(x)~all(xnan(:,:,x),2),...
                 (1:self.npredictors)','uniformoutput',false);
             keyboard;
