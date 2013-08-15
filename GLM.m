@@ -13,6 +13,7 @@ classdef GLM < matlab.mixin.Copyable
         nfeatures % number of features (columns in data)
         npredictors % number of regressors in model (columns in X)
         cvgroup % index for crossvalidation (scalar)
+        nrandsamp % number of samples for permutation / bootstrapping
     end
 
     methods
@@ -26,9 +27,11 @@ classdef GLM < matlab.mixin.Copyable
             [gl.X,gl.data] = deal(X,data);
             gl.nfeatures = size(gl.data,2);
             gl.npredictors = size(gl.X,2);
+            % default to number of samples (sub-classes may change this)
+            gl.nrandsamp = gl.nsamples;
         end
 
-        function estimates = fit(self);
+        function estimates = fit(self)
         % OLS fitted parameter estimates.
         %
         % estimates = fit(self);
@@ -111,7 +114,7 @@ classdef GLM < matlab.mixin.Copyable
         % compute a contrast for self fit based on contrast vector cv.
         %
         % con = contrast(cv)
-            assert(ndims(cv)==2 && all(size(cv)==[1 self(1).npredictors]),...
+            assert(ismatrix(cv) && all(size(cv)==[1 self(1).npredictors]),...
                 'contrast vector must be 1 by npredictors');
             con = cv * fit(self);
         end
@@ -144,12 +147,8 @@ classdef GLM < matlab.mixin.Copyable
             if ieNotDefined('metric')
                 metric = 'r2';
             end
-            n = numel(self);
             nvalues = length(values);
-            nfeatures = self(1).nfeatures;
-            splits = logical(eye(n));
-            meds = NaN([nvalues nfeatures]);
-            orgvalue = [self.(parameter)];
+            meds = NaN([nvalues self(1).nfeatures]);
             for v = 1:nvalues
                 % set parameter in train and test
                 [self.(parameter)] = deal(values(v));
@@ -164,8 +163,10 @@ classdef GLM < matlab.mixin.Copyable
                     funhand = @max;
                 case 'mse'
                     funhand = @min;
+                otherwise
+                    error('unknown metric: %s',metric);
             end
-            [perf,inds] = funhand(meds,[],1);
+            [~,inds] = funhand(meds,[],1);
             winners = values(inds);
         end
 
@@ -192,8 +193,7 @@ classdef GLM < matlab.mixin.Copyable
             end
             nsplits = size(splits,1);
             assert(nsplits > 1,'can only crossvalidate if >1 run');
-            nfeatures = self(1).nfeatures;
-            splitres = NaN([nsplits nfeatures]);
+            splitres = NaN([nsplits self(1).nfeatures]);
             parfor s = 1:nsplits
                 test = splits(s,:);
                 train = ~splits(s,:);
@@ -241,7 +241,6 @@ classdef GLM < matlab.mixin.Copyable
         % performance cost.
         %
         % bootest = bootstrapruns(self,nboot,bootmeth,[outshape])
-            n = numel(self);
             if ieNotDefined('outshape')
                 % this is a little ugly but we can simply run bootmeth once
                 % to see what the output looks like
@@ -250,12 +249,102 @@ classdef GLM < matlab.mixin.Copyable
                     'bootmeth must return at most 2d outputs, got %s',...
                     mat2str(outshape));
             end
+            bootinds = bootindices(numel(self),nboot);
+            % update bootinds in case you asked for more than what's
+            % possible
+            nboot = size(bootinds,1);
             bootest = NaN([outshape nboot]);
             parfor b = 1:nboot
-                %fprintf('%d ',b)
-                % draw random sample with replacement
-                inds = ceil(rand(n,1)*n);
-                bootest(:,:,b) = self(inds).(bootmeth);
+                bootest(:,:,b) = self(bootinds(b,:)).(bootmeth);
+            end
+        end
+
+        function inds = preparesampleperms(self,nperms)
+            inds = permuteindices(self(1).nrandsamp,nperms);
+        end
+
+        function model = drawpermsample(self,inds)
+        % return a new instance where the samples in X have been re-ordered
+        % according to inds. Note that you must supply the same number of
+        % inds as self.nsamples.
+        %
+        % model = drawpermsample(self,inds)
+            assert(numel(inds)==self(1).nsamples,...
+                'got %d inds for %d samples',numel(inds),self(1).nsamples);
+            model = self.copy;
+            for r = 1:length(self)
+                model(r).X = model(r).X(inds,:);
+            end
+        end
+
+        function nulldist = permutesamples(self,nperms,permmeth,outshape)
+        % generate a null distribution of some permmeth (e.g., fit) by
+        % resampling the order of the samples in X without replacement.
+        % Note that the same random resample is applied to the X in each
+        % run. If outshape is undefined we infer it. The returned nulldist
+        % is outshape by nperms.
+        %
+        % nulldist = permutesamples(self,nperms,permmeth,outshape)
+            if ieNotDefined('outshape')
+                outshape = size(self.(permmeth));
+                assert(numel(outshape)<3,...
+                    'permmeth must return at most 2d outputs, got %s',...
+                    mat2str(outshape));
+            end
+            nulldist = NaN([outshape nperms]);
+            perminds = self.preparesampleperms(nperms);
+            for p = 1:size(perminds,1);
+                permd = self.drawpermsample(perminds(p,:));
+                nulldist(:,:,p) = permd.(permmeth);
+            end
+        end
+
+        function inds = preparesampleboots(self,nboot)
+        % return unique indices for bootstrapping (wraps bootindices
+        % function).
+        %
+        % inds = preparesampleboots(self,nboot)
+            inds = bootindices(self.nrandsamp,nboot);
+        end
+
+        function model = drawbootsample(self,inds)
+        % return a new instance where samples in both X and data have been
+        % re-ordered according to inds. Note that you must supply the same
+        % number of inds as self.nsamples.
+        %
+        % model = drawbootsample(self,inds)
+            assert(numel(inds)==self(1).nsamples,...
+                'got %d inds for %d samples',numel(inds),self(1).nsamples);
+            model = self.copy;
+            for r = 1:length(self)
+                model(r).X = model(r).X(inds,:);
+                model(r).data = model(r).data(inds,:);
+            end
+        end
+
+        function bootest = bootstrapsamples(self,nboot,bootmeth,outshape)
+        % bootstrap the estimate for some bootmeth (e.g. fit) by drawing
+        % samples from the rows of X and data in concert. Note that the
+        % same random draw is made to each run. If outshape is undefined we
+        % infer it. The returned bootest is outshape by nboot.
+        %
+        % bootest = bootstrapsamples(self,nboot,bootmeth,outshape)
+            if ieNotDefined('outshape')
+                % this is a little ugly but we can simply run bootmeth once
+                % to see what the output looks like
+                outshape = size(self.(bootmeth));
+                assert(numel(outshape)<3,...
+                    'bootmeth must return at most 2d outputs, got %s',...
+                    mat2str(outshape));
+            end
+            bootinds = self.preparesampleboots(nboot);
+            % update bootinds in case you asked for more than what's
+            % possible
+            nboot = size(bootinds,1);
+            bootest = NaN([outshape nboot]);
+            parfor b = 1:nboot
+                bootd = self.drawbootsample(bootinds(b,:));
+                bootest(:,:,b) = bootd.(bootmeth);
             end
         end
     end
