@@ -10,38 +10,45 @@ classdef RSA < GLM
 
     methods
         function gl = RSA(modelrdms,datardms)
-            % store data in matrix form (for e.g. bootstrapping)
-            Xrdm = asrdmmat(modelrdms);
-            datardm = asrdmmat(datardms);
-            [ncon,ncon,npredictors] = size(Xrdm);
-            % handle NaN content
-            nanx = isnan(Xrdm);
-            % first drop any conditions that are all NaNs (ie, all
-            % row/columns). For this, it's convenient to set the diagonal
-            % to true as well
-            nanx(repmat(logical(eye),[1 1 size(Xrdm,3)])) = true;
-            goodcon = arrayfun(@(x)~all(nanx(:,:,x),2),...
-                1:npredictors,'uniformoutput',false);
-            % nan conditions must be consistent across predictors
-            assert(npredictors==1 || isequal(goodcon{:}),...
-                'inconsistent nan rows across predictors');
-            % reduce to valid cons
-            Xrdm = Xrdm(goodcon{1},goodcon{1},:);
-            datardm = datardm(goodcon{1},goodcon{1},:);
-            % convert to vector and strip NaNs
-            Xvec = rdm2vec(Xrdm);
-            datavec = rdm2vec(datardm);
-            nanmask = any(isnan(Xvec),2) | any(isnan(datavec),2);
-            Xvec(nanmask,:) = [];
-            datavec(nanmask,:) = [];
-            assert(~isempty(Xvec),'no valid (non-NaN) data entered');
+            if nargin == 0
+                Xvec = [];
+                datavec = [];
+            else
+                % store data in matrix form (for e.g. bootstrapping)
+                Xrdm = asrdmmat(modelrdms);
+                datardm = asrdmmat(datardms);
+                [ncon,ncon,npredictors] = size(Xrdm);
+                % handle NaN content
+                nanx = isnan(Xrdm);
+                % first drop any conditions that are all NaNs (ie, all
+                % row/columns). For this, it's convenient to set the diagonal
+                % to true as well
+                nanx(repmat(logical(eye),[1 1 size(Xrdm,3)])) = true;
+                goodcon = arrayfun(@(x)~all(nanx(:,:,x),2),...
+                    1:npredictors,'uniformoutput',false);
+                % nan conditions must be consistent across predictors
+                assert(npredictors==1 || isequal(goodcon{:}),...
+                    'inconsistent nan rows across predictors');
+                % reduce to valid cons
+                Xrdm = Xrdm(goodcon{1},goodcon{1},:);
+                datardm = datardm(goodcon{1},goodcon{1},:);
+                % convert to vector and strip NaNs
+                Xvec = rdm2vec(Xrdm);
+                datavec = rdm2vec(datardm);
+                nanmask = any(isnan(Xvec),2) | any(isnan(datavec),2);
+                Xvec(nanmask,:) = [];
+                datavec(nanmask,:) = [];
+                assert(~isempty(Xvec),'no valid (non-NaN) data entered');
+            end
             % use super-class to initialise            
             gl = gl@GLM(Xvec,datavec);
-            % note that we set nrandsamp to be ncon because randomisation
-            % of the samples is in fact randomisation on the RDM conditions
-            % (rows/columns) in RSA.
-            [gl.ncon,gl.Xrdm,gl.datardm,gl.validvec,gl.nrandsamp] = ...
-                deal(ncon,Xrdm,datardm,~nanmask,ncon);
+            if nargin > 0
+                % note that we set nrandsamp to be ncon because randomisation
+                % of the samples is in fact randomisation on the RDM conditions
+                % (rows/columns) in RSA.
+                [gl.ncon,gl.Xrdm,gl.datardm,gl.validvec,gl.nrandsamp] = ...
+                    deal(ncon,Xrdm,datardm,~nanmask,ncon);
+            end
         end
 
         function cloneargs(self,oldclass)
