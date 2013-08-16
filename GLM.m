@@ -34,14 +34,14 @@ classdef GLM < matlab.mixin.Copyable
         function estimates = fit(self)
         % OLS fitted parameter estimates.
         %
-        % estimates = fit(self);
+        % estimates = fit();
             estimates = olsfit(vertcat(self.X),vertcat(self.data));
         end
 
         function cmat = covmat(self)
-        % covariance matrix for the design.
+        % covariance matrix for the design matrix.
         %
-        % cmat = covmat(self)
+        % cmat = covmat()
             X = vertcat(self.X);
             cmat = inv(X' * X);
         end
@@ -53,30 +53,32 @@ classdef GLM < matlab.mixin.Copyable
             d = sum([self.nsamples]) - rank(vertcat(self.X));
         end
 
-        function r = residuals(self)
-        % residuals of (self-) fitted responses on data.
+        function r = residuals(self,varargin)
+        % residuals of prediction on data. If undefined, we use
+        % self-prediction.
         %
-        % r = residuals()
-            r = predictY(self,vertcat(self.X)) - vertcat(self.data);
+        % r = residuals([prediction])
+            if nargin > 1
+                prediction = vertcat(varargin{:});
+            else
+                prediction = predictY(self,vertcat(self.X));
+            end
+            r = vertcat(self.data) - prediction;
         end
 
         function mr = mrss(self)
-        % return the mean residual sum of squares (calculated over df).
+        % mean residual sum of squares (calculated over df).
         %
         % mr = mrss()
-            resid = residuals(self);
-            rss = sum(resid.^2);
-            mr = rss / df(self);
+            mr = sum(residuals(self).^2,1) / df(self);
         end
 
         function Yfit = predictY(self,varargin)
         % generate fitted (predicted) responses for a design matrix X.
-        % Uses varargin to support combining multiple design matrix inputs
-        % at once.
         %
         % if no inputs are provided we assume you want a self fit.
         %
-        % Yfit = predictY(X,[X],[X etc...])
+        % Yfit = predictY([X])
             if nargin > 1                
                 X = vertcat(varargin{:});
             else
@@ -89,9 +91,10 @@ classdef GLM < matlab.mixin.Copyable
         % mean squared error between predicted responses in Yfit and
         % current data.
         %
-        % if no inputs are provided we assume you want a self fit.
+        % if no inputs are provided we assume you want a self fit
+        % (self.predictY).
         %
-        % mse = mserr(Yfit)
+        % mse = mserr([Yfit])
             if nargin == 1 
                 Yfit = predictY(self);
             end
@@ -101,115 +104,181 @@ classdef GLM < matlab.mixin.Copyable
         function R = rsquare(self,Yfit)
         % R^2 between predicted responses in Yfit and current data.
         %
-        % if no inputs are provided we assume you want a self fit.
+        % if no inputs are provided we assume you want a self fit
+        % (self.predictY).
         %
-        % R = rsquare(Yfit)
+        % R = rsquare([Yfit])
             if nargin == 1
                 Yfit = predictY(self);
             end
             R = rsquare(Yfit,vertcat(self.data));
         end
 
-        function con = contrast(self,cv)
-        % compute a contrast for self fit based on contrast vector cv.
+        function con = contrast(self,conmat)
+        % compute a contrast estimate for each contrast vector (rows) in
+        % conmat.
         %
-        % con = contrast(cv)
-            assert(ismatrix(cv) && all(size(cv)==[1 self(1).npredictors]),...
-                'contrast vector must be 1 by npredictors');
-            con = cv * fit(self);
+        % con = contrast(conmat)
+            con = conmat * fit(self);
         end
 
-        function t = tmap(self,cv)
-        % compute a T contrast for self fit based on contrast vector cv.
+        function se = standarderror(self,conmat)
+        % compute the standard error for each contrast vector (rows) in
+        % conmat.
         %
-        % t = tmap(cv)
-            t = contrast(self,cv) ./ sqrt(mrss(self) * ...
-                (cv * covmat(self) * cv'));
+        % se = standarderror(conmat)
+            se = sqrt(diag((conmat * covmat(self) * conmat')) * ...
+                mrss(self));
         end
 
-        function p = pmap(self,cv)
-        % return one-tailed p values for self fit based on contrast vector
-        % cv.
+        function t = tmap(self,conmat)
+        % compute a t statistic for each contrast vector (rows) in
+        % conmat.
         %
-        % p = pmap(cv)
-            p = 1-tcdf(abs(tmap(self,cv)),df(self));
+        % t = tmap(conmat)
+            t = contrast(self,conmat) ./ standarderror(self,conmat);
         end
 
-        function [winners,meds] = crossvalidateparameter(self,parameter,values,metric)
-        % tune a parameter (char) over a range of values (1D array) using a
-        % leave-one-out crossvalidation method with maximum median R2 or
-        % min mserr (default R2) as the selection criterion (set with
-        % 'metric': 'r2' or 'mse'). winners gives the winning value for
-        % each feature (1 by nfeatures), and med gives the median R2/mserr
-        % for each value (nvalues by nfeatures).
+        function p = pmap(self,conmat,tail)
+        % return p values for each contrast vector (rows) in conmat. Tail
+        % can be both (default), left or right.
         %
-        % [winners,meds] = crossvalidateparameter(parameter,values,[metric])
+        % p = pmap(conmat,tail)
+            if ieNotDefined('tail')
+                tail = 'both';
+            end
+            % get the t statistics
+            t = tmap(self,conmat);
+            switch tail
+                case 'both'
+                    % two-tailed
+                    p = 2 * tcdf(-abs(t),df(self));
+                case 'left'
+                    p = tcdf(t,df(self));
+                case 'right'
+                    p = tcdf(-t,df(self));
+                otherwise
+                    error('unknown tail: %s',tail)
+            end
+        end
+
+        function [winners,meds] = crossvalidateproperty(self,property,values,metric,selectfun)
+        % tune a property (e.g., RidgeGLM's 'k') over a range of values (1D
+        % array) using run-based crossvalidation (cvpredictionrun method)
+        % and selectfun metric (default @max rsquare) as the selection
+        % criterion. winners gives the winning value for each feature (1 by
+        % nfeatures), and med gives the median performance for each value
+        % across splits (nvalues by nfeatures).
+        %
+        % This method should be applied to an independent training split of
+        % the data to avoid circular inference.
+        %
+        % [winners,meds] = crossvalidateproperty(property,values,[metric],[selectfun])
             if ieNotDefined('metric')
-                metric = 'r2';
+                metric = 'rsquare';
+            end
+            if ieNotDefined('selectfun')
+                selectfun = @max;
             end
             nvalues = length(values);
             meds = NaN([nvalues self(1).nfeatures]);
             for v = 1:nvalues
-                % set parameter in train and test
-                [self.(parameter)] = deal(values(v));
-                % cross-validate fit with chosen parameter
-                splitres = crossvalidatefit(self,metric);
+                % set property in train and test
+                [self.(property)] = deal(values(v));
+                % cross-validate fit with chosen property
+                splitres = cvpredictionrun(self,'predictY','rsquare',...
+                    [1 self(1).nfeatures]);
                 % update with median across splits
-                meds(v,:) = median(splitres,1);
+                meds(v,:) = median(splitres,3);
             end
             % find winning value for each feature
-            switch metric
-                case 'r2'
-                    funhand = @max;
-                case 'mse'
-                    funhand = @min;
-                otherwise
-                    error('unknown metric: %s',metric);
-            end
-            [~,inds] = funhand(meds,[],1);
+            [~,inds] = selectfun(meds,[],1);
             winners = values(inds);
         end
 
-        function splitres = crossvalidatefit(self,metric)
-        % return independent estimates of metric (r2 or mse) by
-        % leave-one-out crossvalidation. the output splitres contains one
-        % row for each split of the data.
+        function cvres = cvclassificationrun(self,trainmeth,testmeth,outshape,varargin)
+        % crossvalidate the performance of some classifier fit using
+        % trainmeth (e.g. discriminant) using some testmeth (e.g.
+        % infotmap). this method is for cases where you want to do out of
+        % sample decoding, ie, predict the columns of the design matrix. If
+        % you want to predict the data samples, use cvpredictionrun.
         %
-        % splitres = crossvalidatefit(metric)
-            if ieNotDefined('metric')
-                metric = 'r2';
+        % methargs is any number of extra arguments. These get passed to
+        % both trainmeth and testmeth (e.g., a contrast vector).
+        %
+        % cvres = cvclassificationrun(self,trainmeth,testmeth,outshape,[methargs])
+            if ieNotDefined('outshape')
+                % do a self train/test to infer size of output
+                temp = self.(trainmeth)(varargin{:});
+                outshape = size(self.(testmeth)(temp,varargin{:}));
             end
+            assert(numel(outshape)<3,...
+                'testmeth must return at most 2d outputs, got %s',...
+                mat2str(outshape));
             if all(isempty([self.cvgroup]))
                 % use straight leave one out
                 splits = logical(eye(numel(self)));
             else
-                % use cvgroup indices to leave one _group_ out
                 cvgroups = horzcat(self.cvgroup);
-                assert(~any(isempty(cvgroups) || ~isnumeric(cvgroups)),...
-                    'cvgroup must be defined for all runs');
-                groups = unique(cvgroups)';
-                splits = cell2mat(arrayfun(@(g)cvgroups==g,groups,...
+                assert(~any(~isnumeric(cvgroups)),...
+                    'cvgroup must be numeric');
+                ugroups = unique(cvgroups)';
+                splits = cell2mat(arrayfun(@(g)cvgroups==g,ugroups,...
                     'uniformoutput',false));
             end
-            nsplits = size(splits,1);
-            assert(nsplits > 1,'can only crossvalidate if >1 run');
-            splitres = NaN([nsplits self(1).nfeatures]);
-            parfor s = 1:nsplits
-                test = splits(s,:);
-                train = ~splits(s,:);
-                switch metric
-                    case 'r2'
-                        splitres(s,:) = rsquare(self(test),...
-                            predictY(self(train),self(test).X));
-                    case 'mse'
-                        splitres(s,:) = mserr(self(test),...
-                            predictY(self(train),self(test).X));
-                    otherwise
-                        error('unknown metric: %s',metric);
-                end
+            nsplit = size(splits,1);
+            assert(nsplit > 1,'can only crossvalidate if >1 run');
+            cvres = NaN([outshape nsplit]);
+            % eventually parfor
+            for s = 1:nsplit
+                train = self(~splits(s,:));
+                test = self(splits(s,:));
+                tfit = train.(trainmeth)(varargin{:});
+                cvres(:,:,s) = test.(testmeth)(tfit,varargin{:});
             end
         end
 
+        function cvres = cvpredictionrun(self,trainmeth,testmeth,outshape)
+        % crossvalidate the performance of some prediction trainmeth (e.g.,
+        % predictY) using some testmeth (e.g., rsquare). this method is for
+        % cases where you want to do out of sample regression, that is,
+        % predict the data samples - that is, cases where trainmeth takes
+        % the test design matrix as input. If you are doing out of sample
+        % classification, that is predicting the columns of the design
+        % matrix, use cvclassificationrun. 
+        %
+        % cvres = cvpredictionrun(self,trainmeth,testmeth,outshape)
+            if ieNotDefined('outshape')
+                % do a self test to infer size of output
+                prediction = self.(trainmeth)(self.X);
+                outshape = size(self.(testmeth)(prediction));
+            end
+            assert(numel(outshape)<3,...
+                'testmeth must return at most 2d outputs, got %s',...
+                mat2str(outshape));
+            if all(isempty([self.cvgroup]))
+                % use straight leave one out
+                splits = logical(eye(numel(self)));
+            else
+                cvgroups = horzcat(self.cvgroup);
+                assert(~any(~isnumeric(cvgroups)),...
+                    'cvgroup must be numeric');
+                ugroups = unique(cvgroups)';
+                splits = cell2mat(arrayfun(@(g)cvgroups==g,ugroups,...
+                    'uniformoutput',false));
+            end
+            nsplit = size(splits,1);
+            assert(nsplit > 1,'can only crossvalidate if >1 run');
+            cvres = NaN([outshape nsplit]);
+            % eventually parfor
+            for s = 1:nsplit
+                train = self(~splits(s,:));
+                test = self(splits(s,:));
+                prediction = train.(trainmeth)(test.X);
+                cvres(:,:,s) = test.(testmeth)(prediction);
+            end
+        end
+            
         function [estimates,sterrs,bootest] = bootstraprunfit(self,nboot)
         % draw nboot samples with replacement from the available runs in
         % self. Return the median and standard error of the model fit. Uses
@@ -245,10 +314,10 @@ classdef GLM < matlab.mixin.Copyable
                 % this is a little ugly but we can simply run bootmeth once
                 % to see what the output looks like
                 outshape = size(self.(bootmeth));
-                assert(numel(outshape)<3,...
-                    'bootmeth must return at most 2d outputs, got %s',...
-                    mat2str(outshape));
             end
+            assert(numel(outshape)<3,...
+                'bootmeth must return at most 2d outputs, got %s',...
+                mat2str(outshape));
             bootinds = bootindices(numel(self),nboot);
             % update bootinds in case you asked for more than what's
             % possible
@@ -287,10 +356,10 @@ classdef GLM < matlab.mixin.Copyable
         % nulldist = permutesamples(self,nperms,permmeth,outshape)
             if ieNotDefined('outshape')
                 outshape = size(self.(permmeth));
-                assert(numel(outshape)<3,...
-                    'permmeth must return at most 2d outputs, got %s',...
-                    mat2str(outshape));
             end
+            assert(numel(outshape)<3,...
+                'permmeth must return at most 2d outputs, got %s',...
+                mat2str(outshape));
             nulldist = NaN([outshape nperms]);
             perminds = self.preparesampleperms(nperms);
             for p = 1:size(perminds,1);
@@ -333,10 +402,10 @@ classdef GLM < matlab.mixin.Copyable
                 % this is a little ugly but we can simply run bootmeth once
                 % to see what the output looks like
                 outshape = size(self.(bootmeth));
-                assert(numel(outshape)<3,...
-                    'bootmeth must return at most 2d outputs, got %s',...
-                    mat2str(outshape));
             end
+            assert(numel(outshape)<3,...
+                'bootmeth must return at most 2d outputs, got %s',...
+                mat2str(outshape));
             bootinds = self.preparesampleboots(nboot);
             % update bootinds in case you asked for more than what's
             % possible
@@ -346,6 +415,45 @@ classdef GLM < matlab.mixin.Copyable
                 bootd = self.drawbootsample(bootinds(b,:));
                 bootest(:,:,b) = bootd.(bootmeth);
             end
+        end
+
+        function w = discriminant(self,conmat)
+        % fit linear discriminant(s) w for the contrast(s) in conmat. Uses
+        % a shrinkage covariance estimator (see covdiag.m).
+        %
+        % w = discriminant(self,conmat)
+            sa = covdiag(residuals(self));
+            w = contrast(self,conmat) / sa;
+        end
+
+        function model = infomodel(self,w)
+        % return a new GLM instance where the data have been projected onto
+        % the discriminant(s) w (fitted with e.g. GLM.discriminant). The
+        % resulting model is one concatenated run with one feature
+        % per discriminant (size(w,1)). See Kriegeskorte et al., 2007,
+        % PNAS. 
+        %
+        % model = infomodel(self,w)
+            X = vertcat(self.X);
+            % project the data onto the discriminant matrix (so from
+            % nsamples by nfeatures to nsamples by ndiscriminants)
+            dataw = vertcat(self.data) * w';
+            % make a new GLM instance (NB, we ignore sub-classing here -
+            % assume the original self.data has already been appropriately
+            % pre-processed, e.g. as part of constructing a CovGLM)
+            model = GLM(X,dataw);
+        end
+
+        function [t,model] = infotmap(self,w,conmat)
+        % return t estimates for contrasts conmat computed on the
+        % infomodel(w). The resulting t summarises the strength of the
+        % pattern information effect for each contrast.
+            model = infomodel(self,w);
+            % diag to get each contrast's estimate on its own discriminant
+            % feature.
+            cons = diag(contrast(model,conmat));
+            errs = diag(standarderror(model,conmat));
+            t = cons ./ errs;
         end
     end
 end

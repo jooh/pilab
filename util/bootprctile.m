@@ -1,4 +1,8 @@
-% Use a bootstrap distribution ( by nboot)
+% Conduct a percentile bootstrap on the distribution in bootest (with
+% boostraps in the final dimension). return the median estimates and
+% standard errors (half difference between 16th and 84th percentiles).
+%
+% [estimates,sterrs] = bootprctile(bootest)
 function [estimates,sterrs] = bootprctile(bootest)
 
 % 2nd or 3rd I would expect
@@ -12,5 +16,5 @@ switch bootdim
         estimates = percs(:,:,2);
         sterrs = diff(percs(:,:,[1 3]),1,3)/2;
     otherwise
-        error('bootprctile not support for %d inputs',bootdim)
+        error('no bootprctile support for %d inputs',bootdim)
 end
