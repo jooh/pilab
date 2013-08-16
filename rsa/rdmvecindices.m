@@ -7,6 +7,8 @@ function inds = rdmvecindices(conind,ndis)
 if islogical(conind)
     conind = find(conind);
 end
+assert(numel(unique(conind))==numel(conind),'all indices must be unique');
+
 ncon = npairs2n(ndis);
 assert(ncon==round(ncon),'ndis: %d invalid size for a vectorised RDM',ndis);
 nind = length(conind);
