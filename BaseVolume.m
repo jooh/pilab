@@ -269,7 +269,7 @@ classdef BaseVolume < handle
                     [dat,meta] = basesubsref(a,s);
                     % make a new instance
                     varargout{1} = BaseVolume(dat,'metasamples',meta.samples,...
-                        'metafeatures',meta.features,'frameperiod',self.frameperiod);
+                        'metafeatures',meta.features,'frameperiod',a.frameperiod);
                 otherwise
                     % revert to builtin behaviour
                     try
