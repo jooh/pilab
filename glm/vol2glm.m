@@ -15,8 +15,11 @@ if ieNotDefined('glmclass')
 end
 
 chunks = designvol.desc.samples.unique.chunks;
-glm = arrayfun(@(c) feval(glmclass,...
-    designvol.data(designvol.meta.samples.chunks==c,:),...
-    datavol.data(datavol.meta.samples.chunks==c,:),varargin{:}),chunks,...
-    'uniformoutput',false);
-glm = vertcat(glm{:});
+labels = designvol.meta.features.labels;
+for c = 1:designvol.desc.samples.nunique.chunks
+    thischunk = chunks(c);
+    glm(c) = feval(glmclass,designvol.data(...
+        designvol.meta.samples.chunks==thischunk,:),datavol.data(...
+        datavol.meta.samples.chunks==thischunk,:),varargin{:});
+    glm(c).predictornames = labels;
+end
