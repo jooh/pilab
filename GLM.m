@@ -446,7 +446,7 @@ classdef GLM < matlab.mixin.Copyable
 
         function [t,model] = infotmap(self,w,conmat)
         % return t estimates for contrasts conmat computed on the
-        % infomodel(w). The resulting t summarises the strength of the
+        % infomodel(self,w). The resulting t summarises the strength of the
         % pattern information effect for each contrast.
             model = infomodel(self,w);
             % diag to get each contrast's estimate on its own discriminant
@@ -454,6 +454,16 @@ classdef GLM < matlab.mixin.Copyable
             cons = diag(contrast(model,conmat));
             errs = diag(standarderror(model,conmat));
             t = cons ./ errs;
+        end
+
+        function mahdist = infomahalanobis(self,w,conmat)
+        % return the mahalonobis distance between the points in conmat
+        % computed on the infomodel(self,w).
+            model = infomodel(self,w);
+            % the approach taken here is to take the square root of each
+            % contrast estimate. If you estimated w on the same data this
+            % is equivalent to the mahalanobis distance.
+            mahdist = sqrt(diag(contrast(model,conmat)))';
         end
     end
 end
