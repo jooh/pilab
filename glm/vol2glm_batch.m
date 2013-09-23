@@ -1,7 +1,7 @@
 % batch convert designvol / epivol to a cell of GLM instances. Used
 % internally in aamod_pilab_glmfit and aamod_pilab_rdms_ldt.
 %
-% ts fields:
+% named varargs:
 %
 % sgolayK: degree of optional Savitsky-Golay detrend 
 % sgolayF: filter size of optional Savitsky-Golay detrend
@@ -12,26 +12,26 @@
 % glmclass: char defining CovGLM sub-class (e.g. 'CovGLM')
 % glmvarargs: any additional arguments for GLM (e.g. k for RidgeGLM)
 %
-% [glmcell,nancell] = vol2glm_batch(designvol,epivol,ts)
-function [glmcell,nancell] = vol2glm_batch(designvol,epivol,ts)
+% [glmcell,nancell] = vol2glm_batch(designvol,epivol,varargin)
+function [glmcell,nancell] = vol2glm_batch(designvol,epivol,varargin)
+
+getArgs(varargin,{'sgolayK',[],'sgolayF',[],'split',[],...
+    'covariatedeg',[],'targetlabels',{},'ignorelabels',{},...
+    'glmclass','GLM','glmvarargs',{}});
 
 nchunks = epivol.desc.samples.nunique.chunks;
 
 % detrend before splitting
-if ~isempty(ts.sgolayK)
-    assert(isempty(ts.covariatedeg),['probably should not ' ...
+if ~isempty(sgolayK)
+    assert(isempty(covariatedeg),['probably should not ' ...
         'detrend and include trend covariates at the same time']);
-    fprintf('detrending (K=%d,F=%d)\n',...
-        ts.sgolayK,...
-        ts.sgolayF);
-    epivol.sgdetrend(ts.sgolayK,...
-        ts.sgolayF);
-    designvol.sgdetrend(ts.sgolayK,...
-        ts.sgolayF);
+    fprintf('detrending (K=%d,F=%d)\n',sgolayK,sgolayF);
+    epivol.sgdetrend(sgolayK,sgolayF);
+    designvol.sgdetrend(sgolayK,sgolayF);
 end
 
 % find a reasonable polynomial degree
-if strcmp(ts.covariatedeg,'adaptive')
+if strcmp(covariatedeg,'adaptive')
     covdegs = NaN([1 nchunks]);
     for c = 1:nchunks
         nvol = sum(epivol.meta.samples.chunks == ...
@@ -40,14 +40,14 @@ if strcmp(ts.covariatedeg,'adaptive')
         % duration.
         covdegs(c) = round(nvol * epivol.frameperiod / 60 / 2);
     end
-    assert(~any(isnan(ts.covariatedeg)),...
+    assert(~any(isnan(covariatedeg)),...
         'failed to identify covariatedeg');
     % if we found a single deg that works for all runs, life is
     % easy
     if all(covdegs(1)==covdegs)
-        ts.covariatedeg = covdegs(1);
-        fprintf('adaptively selected covariate degree: %d\n',...
-            ts.covariatedeg);
+        covariatedeg = covdegs(1);
+        %fprintf('adaptively selected covariate degree: %d\n',...
+            %covariatedeg);
     else
         % otherwise we need to add new functionality to CovGLM to
         % support different covariatedeg for different runs.
@@ -59,39 +59,41 @@ end
 
 % find correct labels
 nlabels = length(designvol.desc.features.unique.labels);
-if isempty(ts.targetlabels)
+if isempty(targetlabels)
     coninds = 1:nlabels;
 else
-    coninds = findStrInArray(designvol.desc.features.unique.labels,...
-        ts.targetlabels);
+    coninds = find(strcmp(designvol.desc.features.unique.labels,...
+        targetlabels));
 end
 
-if ~isempty(ts.ignorelabels)
-    ignoreinds = findStrInArray(designvol.desc.features.unique.labels,...
-        ts.ignorelabels);
-    coninds = setdiff(coninds,ignoreinds);
+if ~isempty(ignorelabels)
+    ignoreinds = find(strcmp(designvol.desc.features.unique.labels,...
+        ignorelabels));
+    coninds = setdiff(coninds,ignoreinds,'stable');
 end
 
 assert(~isempty(coninds),...
     'found no labels matching targetlabels/ignorelabels %s/%s',...
-    ts.targetlabels,ts.ignorelabels);
+    targetlabels,ignorelabels);
 ncon = length(coninds);
-fprintf('storing estimates for %d conditions\n',ncon);
+%fprintf('storing estimates for %d conditions\n',ncon);
+
+designvol = designvol(:,coninds);
 
 % empty cells don't get read properly
-if isempty(ts.glmvarargs)
-    ts.glmvarargs = {};
+if isempty(glmvarargs)
+    glmvarargs = {};
 end
 
 % split the volumes
-[designcell,epicell] = splitvol(ts.split,designvol,epivol);
+[designcell,epicell] = splitvol(split,designvol,epivol);
+nsplit = numel(designcell);
 
 glmcell = cell(nsplit,1);
 nancell = cell(nsplit,1);
 for s = 1:nsplit
-    fprintf('fitting split %d of %d...\n',s,nsplit);
+    %fprintf('fitting split %d of %d...\n',s,nsplit);
     % split-specific data
-    splitind = split==usplit(s);
     splitepi = epicell{s};
     splitdesign = designcell{s};
 
@@ -108,7 +110,7 @@ for s = 1:nsplit
         splitepi = splitepi(:,nanmask);
     end
     % implement some kind of glm
-    glmcell{s} = vol2glm(splitdesign,splitepi,ts.glmclass,...
-        ts.covariatedeg,ts.glmvarargs{:});
+    glmcell{s} = vol2glm(splitdesign,splitepi,glmclass,...
+        covariatedeg,glmvarargs{:});
     nancell{s} = nanmask;
 end
