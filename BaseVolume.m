@@ -281,6 +281,13 @@ classdef BaseVolume < handle
             end
         end
 
+        function out = end(A,k,n)
+            % override 'end' operator to get end in self.data rather than
+            % self when doing e.g. v2 = vol(end,:);
+            % out = end(A,k,n)
+            out = feval('end',A.data,k,n);
+        end
+
         function [dat,meta] = basesubsref(a,s)
         % basic subsref behaviour. Should be called in subclass subsref.
         % It's a bit baffling, but Matlab will not tolerate having these
