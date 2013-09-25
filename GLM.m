@@ -196,25 +196,12 @@ classdef GLM < matlab.mixin.Copyable
             winners = values(inds);
         end
 
-        function cvres = cvclassificationrun(self,trainmeth,testmeth,outshape,varargin)
-        % crossvalidate the performance of some classifier fit using
-        % trainmeth (e.g. discriminant) using some testmeth (e.g.
-        % infotmap). this method is for cases where you want to do out of
-        % sample decoding, ie, predict the columns of the design matrix. If
-        % you want to predict the data samples, use cvpredictionrun.
+        function splits = preparerunsplits(self)
+        % set up a logical array where each row provides logical indices
+        % into the available runs (true for test, false for train). Uses
+        % the cvgroups field.
         %
-        % methargs is any number of extra arguments. These get passed to
-        % both trainmeth and testmeth (e.g., a contrast vector).
-        %
-        % cvres = cvclassificationrun(self,trainmeth,testmeth,outshape,[methargs])
-            if ieNotDefined('outshape')
-                % do a self train/test to infer size of output
-                temp = self.(trainmeth)(varargin{:});
-                outshape = size(self.(testmeth)(temp,varargin{:}));
-            end
-            assert(numel(outshape)<3,...
-                'testmeth must return at most 2d outputs, got %s',...
-                mat2str(outshape));
+        % splits = preparerunsplits(self)
             if all(isempty([self.cvgroup]))
                 % use straight leave one out
                 splits = logical(eye(numel(self)));
@@ -226,15 +213,79 @@ classdef GLM < matlab.mixin.Copyable
                 splits = cell2mat(arrayfun(@(g)cvgroups==g,ugroups,...
                     'uniformoutput',false));
             end
+        end
+
+        function cvres = cvclassificationrun(self,trainmeth,testmeth,outshape,varargin)
+        % crossvalidate the performance of some classifier fit with
+        % trainmeth (e.g. discriminant) and some testmeth (e.g.
+        % infotmap). this method is for cases where you want to do out of
+        % sample decoding, ie, predict the columns of the design matrix. If
+        % you want to predict the data samples, use cvpredictionrun.
+        %
+        % methargs is any number of extra arguments. These get passed to
+        % both trainmeth and testmeth (e.g., a contrast vector).
+        %
+        % cvres = cvclassificationrun(self,trainmeth,testmeth,outshape,[methargs])
+            cvres = cvcrossclassificationrun(self,trainmeth,testmeth,...
+                outshape,varargin,varargin);
+        end
+
+        function cvres = cvcrossclassificationrun(self,trainmeth,testmeth,outshape,trainargs,testargs)
+        % crossvalidate the performance of some classifier fit with
+        % trainmeth (e.g. discriminant) and some set of parameters (e.g. a
+        % contrast vector) and apply testmeth (e.g.  infotmap) with a
+        % second set of parameters (e.g. a different contrast vector). this
+        % method is for cases where you want to do out of sample
+        % cross-decoding, ie, train on some columns of the design matrix.
+        % and predict another set of columns. If you want to predict the
+        % data samples, use cvpredictionrun.
+        %
+        % trainargs and testargs are cell arrays with any number of extra
+        % arguments.         %
+        %
+        % cvres = cvcrossclassificationrun(self,trainmeth,testmeth,outshape,[trainargs],[testargs])
+            if ieNotDefined('trainargs')
+                trainargs = {};
+            end
+            if ieNotDefined('testargs')
+                testargs = {};
+            end
+            if ieNotDefined('outshape')
+                % do a self train/test to infer size of output
+                temp = self.(trainmeth)(trainargs{:});
+                outshape = size(self.(testmeth)(temp,testargs{:}));
+            end
+            assert(numel(outshape)<3,...
+                'testmeth must return at most 2d outputs, got %s',...
+                mat2str(outshape));
+            splits = preparerunsplits(self);
+            % TODO - if train/test are different we effectively have
+            % 2*nsplit combinations to run
             nsplit = size(splits,1);
             assert(nsplit > 1,'can only crossvalidate if >1 run');
             cvres = NaN([outshape nsplit]);
-            % eventually parfor
             for s = 1:nsplit
                 train = self(~splits(s,:));
                 test = self(splits(s,:));
-                tfit = train.(trainmeth)(varargin{:});
-                cvres(:,:,s) = test.(testmeth)(tfit,varargin{:});
+                tfit = train.(trainmeth)(trainargs{:});
+                cvres(:,:,s) = test.(testmeth)(tfit,testargs{:});
+            end
+        end
+
+        function model = drawpermrun(self,runinds)
+        % return a model where the design matrix X has been randomly
+        % reassigned to different runs according to runinds. This is a
+        % useful way to build a null distribution if
+        % a) your runs have identical nsamples 
+        % b) your design matrices are independent
+        %
+        % model = permuterun(self,runinds)
+            X = {self.X};
+            model = self.copy;
+            nrun = length(self);
+            assert(nrun == numel(runinds),'runinds does not match nrun');
+            for r = 1:length(model)
+                model(r).X = X{runinds(r)};
             end
         end
 
@@ -256,21 +307,10 @@ classdef GLM < matlab.mixin.Copyable
             assert(numel(outshape)<3,...
                 'testmeth must return at most 2d outputs, got %s',...
                 mat2str(outshape));
-            if all(isempty([self.cvgroup]))
-                % use straight leave one out
-                splits = logical(eye(numel(self)));
-            else
-                cvgroups = horzcat(self.cvgroup);
-                assert(~any(~isnumeric(cvgroups)),...
-                    'cvgroup must be numeric');
-                ugroups = unique(cvgroups)';
-                splits = cell2mat(arrayfun(@(g)cvgroups==g,ugroups,...
-                    'uniformoutput',false));
-            end
+            splits = preparerunsplits(self);
             nsplit = size(splits,1);
             assert(nsplit > 1,'can only crossvalidate if >1 run');
             cvres = NaN([outshape nsplit]);
-            % eventually parfor
             for s = 1:nsplit
                 train = self(~splits(s,:));
                 test = self(splits(s,:));
@@ -328,10 +368,6 @@ classdef GLM < matlab.mixin.Copyable
             end
         end
 
-        function inds = preparesampleperms(self,nperms)
-            inds = permuteindices(self(1).nrandsamp,nperms);
-        end
-
         function model = drawpermsample(self,inds)
         % return a new instance where the samples in X have been re-ordered
         % according to inds. Note that you must supply the same number of
@@ -344,6 +380,10 @@ classdef GLM < matlab.mixin.Copyable
             for r = 1:length(self)
                 model(r).X = model(r).X(inds,:);
             end
+        end
+
+        function inds = preparesampleperms(self,nperms)
+            inds = permuteindices(self(1).nrandsamp,nperms);
         end
 
         function nulldist = permutesamples(self,nperms,permmeth,outshape)
