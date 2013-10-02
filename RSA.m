@@ -10,115 +10,115 @@ classdef RSA < GLM
 
     methods
         function gl = RSA(modelrdms,datardms)
-            % store unaltered data in matrix form (for e.g. bootstrapping)
-            Xrdm = asrdmmat(modelrdms);
-            datardm = asrdmmat(datardms);
-            ncon = size(Xrdm,1);
-            % convert to vector and strip NaNs
-            Xvec = rdm2vec(Xrdm);
-            datavec = rdm2vec(datardm);
-            nanmask = any(isnan(Xvec),2) | any(isnan(datavec),2);
-            Xvec(nanmask,:) = [];
-            datavec(nanmask,:) = [];
-            assert(~isempty(Xvec),'no valid (non-NaN) data entered');
+            if nargin == 0
+                Xvec = [];
+                datavec = [];
+            else
+                % store data in matrix form (for e.g. bootstrapping)
+                Xrdm = asrdmmat(modelrdms);
+                datardm = asrdmmat(datardms);
+                [ncon,ncon,npredictors] = size(Xrdm);
+                % handle NaN content
+                nanx = isnan(Xrdm);
+                % first drop any conditions that are all NaNs (ie, all
+                % row/columns). For this, it's convenient to set the diagonal
+                % to true as well
+                nanx(repmat(logical(eye),[1 1 size(Xrdm,3)])) = true;
+                goodcon = arrayfun(@(x)~all(nanx(:,:,x),2),...
+                    1:npredictors,'uniformoutput',false);
+                % nan conditions must be consistent across predictors
+                assert(npredictors==1 || isequal(goodcon{:}),...
+                    'inconsistent nan rows across predictors');
+                % reduce to valid cons
+                Xrdm = Xrdm(goodcon{1},goodcon{1},:);
+                datardm = datardm(goodcon{1},goodcon{1},:);
+                % convert to vector and strip NaNs
+                Xvec = rdm2vec(Xrdm);
+                datavec = rdm2vec(datardm);
+                nanmask = any(isnan(Xvec),2) | any(isnan(datavec),2);
+                Xvec(nanmask,:) = [];
+                datavec(nanmask,:) = [];
+                assert(~isempty(Xvec),'no valid (non-NaN) data entered');
+            end
             % use super-class to initialise            
             gl = gl@GLM(Xvec,datavec);
-            [gl.ncon,gl.Xrdm,gl.datardm,gl.validvec] = deal(ncon,Xrdm,...
-                datardm,~nanmask);
+            if nargin > 0
+                % note that we set nrandsamp to be ncon because randomisation
+                % of the samples is in fact randomisation on the RDM conditions
+                % (rows/columns) in RSA.
+                [gl.ncon,gl.Xrdm,gl.datardm,gl.validvec,gl.nrandsamp] = ...
+                    deal(ncon,Xrdm,datardm,~nanmask,ncon);
+            end
         end
 
         function cloneargs(self,oldclass)
-            % does nothing for base RSA case.
+            % does nothing for base RSA case. (in sub-classes this method
+            % is used to insure that subclass properties get set properly
+            % during resampling.
         end
 
-        function permglm = permuteconditions(self)
-        % return a new instance where the rows and columns in the Xrdm
-        % have been permuted without replacement.
+        function permglm = drawpermsample(self,inds)
+        % return a new instance where the conditions in the Xrdm have been
+        % re-ordered according to inds. Note that you must supply the same
+        % number of inds as self.ncon. Overrides GLM base class behaviour.
         %
-        % permglm = permuteconditions()
-            xtemp = self.Xrdm;
-            % set diagonal to NaN to make the check easier
-            xtemp(repmat(logical(eye(self.ncon)),...
-                [1 1 self.npredictors])) = NaN;
-            xnan = isnan(xtemp);
-            goodcons = arrayfun(@(x)~all(xnan(:,:,x),2),...
-                (1:self.npredictors)','uniformoutput',false);
-            keyboard;
-            goodcons = cell2mat(goodcons);
-            permglm = [];
+        % model = drawpermsample(self,inds)
+            permX = self(1).Xrdm(inds,inds,:);
+            permglm = self.copy;
+            for r = 1:length(permglm)
+                permglm(r) = feval(class(self),permX,self(r).datardm);
+                cloneargs(permglm(r),self(r));
+            end
         end
 
-        function [bootglm,removedprop] = bootsampleconditions(self)
-        % return a new glm instance where the Xrdm and datardm in self have
-        % been sampled with replacement.         
+        function [bootglm,removedprop] = drawbootsample(self,inds)
+        % return a new instance where the conditions in the Xrdm and
+        % datardms have been resampled with replacement in concert.
+        % Overrides GLM base class behaviour.
         %
         % Unlike sampling without replacement, RDM bootstrapping can shift
         % diagonal dissimilarities to off-diagonal positions.  These should
         % be removed to avoid underestimating the variance (since data and
-        % design will have matching zeros). removedprop is a diagnostic
-        % output of the proportion of removed dissimilarities.
-        %
-        % [bootglm,removedprop] = bootsampleconditions(self)
-            nrun = length(self);
-            % random condition sample with replacement
-            consamp = ceil(rand(self(1).ncon,1)*self(1).ncon);
+        % design will have matching zeros by definition). removedprop is a
+        % diagnostic output of the proportion of removed dissimilarities.
+            assert(all(all(vertcat(self.data)~=0)),...
+                'cannot sample when zeros are present in data');
             % this approach assumes that zeros only happen in the data
             % dissimilarities when diagonals have been resampled to
             % off-diagonal positions
-            assert(all(all(vertcat(self.data)~=0)),...
-                'cannot sample when zeros are present in data');
-            % find zeros in rdm mat
-            matmask = self(1).datardm(consamp,consamp,1)==0;
-            % restrict to off-diagonals
+            % find zeros in the boot sampled rdm mat - ie, diagonals that
+            % moved.
+            matmask = self(1).datardm(inds,inds,1)==0;
+            % skip true diagonals
             matmask(logical(eye(self(1).ncon))) = 0;
-            % process each run in the new instance - maybe parfor?
-            for r = 1:nrun
-                datasample = self(r).datardm(consamp,consamp,:);
-                modelsample = self(r).Xrdm(consamp,consamp,:);
-                % make off-diagonal zeros NaN
-                datasample(repmat(matmask,[1 1 self(r).nfeatures])) = NaN;
-                modelsample(repmat(matmask,[1 1 self(r).npredictors])) = NaN;
-                % create a new instance
+            % pre-allocate to biggest needed size so we can later just
+            % slice for speed
+            matmask = repmat(matmask,[1 1 max([self.nfeatures ...
+                self.npredictors])]);
+            % process each run in the new instance
+            for r = 1:numel(self)
+                datasample = self(r).datardm(inds,inds,:);
+                modelsample = self(r).Xrdm(inds,inds,:);
+                % make off-diagonal zeros NaN (these then get removed on
+                % RSA class init)
+                datasample(matmask(:,:,1:self(r).nfeatures)) = NaN;
+                modelsample(matmask(:,:,1:self(r).npredictors)) = NaN;
+                % create a new instance of whatever class the current
+                % instance is
                 bootglm(r) = feval(class(self),modelsample,datasample);
-                % pass any custom properties for the sub-class, e.g. ridge
-                % k
+                % pass any custom properties from the current instance to
+                % the boot instance (e.g., the RidgeRSA k parameter)
                 cloneargs(bootglm(r),self(r));
             end
             removedprop = (self(1).nsamples - bootglm(1).nsamples) / ...
                 self(1).nsamples;
         end
 
-        function [bootest,removedprops] = bootstrapconditions(self,nboot,bootmeth,outshape)
-        % general method for computing bootstrap estimates for some
-        % bootmeth (char) by resampling the conditions in the RDM. See
-        % GLM.bootstrapruns for details of approach and arguments.
-        %
-        %
-        % [bootest,removedprops] = bootstrapconditions(self,nboot,bootmeth,outshape)
-            if ieNotDefined('outshape')
-                outshape = size(self.(bootmeth));
-                assert(numel(outshape)<3,...
-                    'bootmeth must return at most 2d outputs, got %s',...
-                    mat2str(outshape));
-            end
-            bootest = NaN([outshape nboot]);
-            allinds = 1:self(1).ncon;
-            nrun = length(self);
-            % convert data back to 3D RDMs for ease of indexing
-            datamats = arrayfun(@(ind)asrdmmat(self(ind).data),...
-                1:nrun,'uniformoutput',false);
-            modelmats = arrayfun(@(ind)asrdmmat(self(ind).X),...
-                1:nrun,'uniformoutput',false);
-            removedprops = NaN([1 nboot]);
-            parfor b = 1:nboot
-                [bootglm,removedprops(b)] = self.bootsampleconditions;
-                bootest(:,:,b) = bootglm.(bootmeth);
-            end
-        end
-
         function model = selectconditions(self,cons)
         % return a new instance only containing the samples corresponding
-        % to the condition indices cons (numerical or logical).
+        % to the condition indices cons (numerical or logical). note that
+        % cons is not sorted so that the condition order can be permuted.
+        %
         % model = selectconditions(self,cons)
             % nchoosek here rather than nsamples since we may have stripped
             % NaNs from vector

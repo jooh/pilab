@@ -269,7 +269,7 @@ classdef BaseVolume < handle
                     [dat,meta] = basesubsref(a,s);
                     % make a new instance
                     varargout{1} = BaseVolume(dat,'metasamples',meta.samples,...
-                        'metafeatures',meta.features,'frameperiod',self.frameperiod);
+                        'metafeatures',meta.features,'frameperiod',a.frameperiod);
                 otherwise
                     % revert to builtin behaviour
                     try
@@ -279,6 +279,13 @@ classdef BaseVolume < handle
                         builtin('subsref',a,s);
                     end
             end
+        end
+
+        function out = end(A,k,n)
+            % override 'end' operator to get end in self.data rather than
+            % self when doing e.g. v2 = vol(end,:);
+            % out = end(A,k,n)
+            out = feval('end',A.data,k,n);
         end
 
         function [dat,meta] = basesubsref(a,s)

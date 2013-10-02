@@ -10,12 +10,19 @@ classdef CovGLM < GLM
     methods
         function gl = CovGLM(X,Y,covariatedegree)
             if ~ieNotDefined('covariatedegree')
-                covariates = constructpolynomialmatrix(size(Y,1),...
-                    (0:covariatedegree));
-                % get Y/X with covariates projected out
-                projector = projectionmatrix(covariates);
-                Y = projector * Y;
-                X = projector * X;
+                if covariatedegree == 0
+                    % special case - simple de-mean can be done much faster
+                    % like this
+                    Y = bsxfun(@minus,Y,mean(Y));
+                    X = bsxfun(@minus,X,mean(X));
+                else
+                    covariates = constructpolynomialmatrix(size(Y,1),...
+                        (0:covariatedegree));
+                    % get Y/X with covariates projected out
+                    projector = projectionmatrix(covariates);
+                    Y = projector * Y;
+                    X = projector * X;
+                end
             end
             % initialise with super-class constructor
             gl = gl@GLM(X,Y);
