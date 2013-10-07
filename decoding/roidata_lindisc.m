@@ -21,11 +21,8 @@
 % [res,nulldist,bootdist] = roidata_lindisc(rois,designvol,epivol,contrasts,varargin)
 function [res,nulldist,bootdist] = roidata_lindisc(rois,designvol,epivol,contrasts,varargin)
 
-% right now we crossvalidate the discriminant by session. This is possibly
-% suboptimal but necessary since we glmdenoised each session. Consider
-% changing in the future.
 ts = varargs2structfields(varargin,struct('sgolayK',[],'sgolayF',[],...
-    'split',repinds(1,4,4),'covariatedeg','adaptive','targetlabels',[],...
+    'split',[],'covariatedeg','adaptive','targetlabels',[],...
     'ignorelabels','responses','glmclass','CovGLM','glmvarargs',[],...
     'nperm',1,'nboot',0));
 
@@ -43,17 +40,23 @@ perminds = permuteindices(designvol.desc.samples.nunique.chunks,ts.nperm);
 bootinds = bootindices(designvol.desc.samples.nunique.chunks,ts.nboot);
 
 ncon = numel(contrasts);
-basedat = NaN([rois.nsamples ncon]);
-res = struct('rows_roi',{rois.meta.samples.names},'cols_contrast',...
-    {{contrasts.name}},'t',basedat,'p',basedat,'medianboot',basedat,...
-    'medianste',basedat),'nfeatures',NaN([rois.nsamples]);
+basedat = NaN([ncon rois.nsamples]);
+% transpose since ROIs will be in columns rather than rows now
+cols_roi = {asrow(rois.meta.samples.names)};
+rows_contrast = {ascol({contrasts.name})};
+
+res = struct('cols_roi',cols_roi,'rows_contrast',rows_contrast,...
+    't',basedat,'pperm',basedat,'medianboot',basedat,...
+    'medianste',basedat,'ppara',basedat,'nfeatures',...
+    NaN([1,rois.nsamples]));
 
 % segregate the nulldist/bootdist because these tend to blow up in size
-nulldist = struct('rows_roi',{rois.meta.samples.names},'cols_contrast',...
-    {{contrasts.name}},'t',NaN([rois.nsamples ncon ts.nperm]);
-bootdist = struct('rows_roi',{rois.meta.samples.names},'cols_contrast',...
-    {{contrasts.name}},'t',NaN([rois.nsamples ncon ts.nboot]);
+nulldist = struct('cols_roi',cols_roi,'rows_contrast',rows_contrast,...
+    't',NaN([ncon rois.nsamples ts.nperm]));
+bootdist = struct('cols_roi',cols_roi,'rows_contrast',rows_contrast,...
+    't',NaN([ncon rois.nsamples ts.nboot]));
 
+% can't parfor here because epivol is likely too big to pass around
 for r = 1:rois.nsamples
     fprintf('decoding roi %d of %d\n',r,rois.nsamples);
     % skip empty rois (these come out as NaN)
@@ -82,9 +85,11 @@ for r = 1:rois.nsamples
     if ts.nperm > 1
         fprintf('running %d permutations\n',ts.nperm);
     end
+
     % get discriminants
     for c = 1:ncon
         % permutation test
+        ptemp = nulldist.t(c,r,:);
         parfor p = 1:ts.nperm
             % draw a model (or just the original if p==1)
             permmodel = drawpermrun(model,perminds(p,:));
@@ -92,21 +97,32 @@ for r = 1:rois.nsamples
                 'infotmap',[],{contrasts(c).traincon},...
                 {contrasts(c).testcon});
             % average splits and discriminants
-            nulldist.t(r,c,p) = mean(raw(:));
+            ptemp(1,1,p) = mean(raw(:));
         end % p ts.nperm
+        nulldist.t(c,r,:) = ptemp;
         % bootstrap
+        btemp = bootdist.t(c,r,:);
         parfor b = 1:ts.nboot
             bootmodel = model(bootinds(b,:));
             raw = cvcrossclassificationrun(bootmodel,'discriminant',...
                 'infotmap',[],{contrasts(c).traincon},...
                 {contrasts(c).testcon});
             % average splits and discriminants
-            bootdist.t(r,c,b) = mean(raw(:));
+            btemp(1,1,b) = mean(raw(:));
         end
+        bootdist.t(c,r,:) = btemp;
     end % c ncon
 end % r rois.nsamples
 
 % get result for true model
 res.t = nulldist.t(:,:,1);
-res.p = permpvalue(nulldist.t);
+if ts.nperm > 1
+    res.pperm = permpvalue(nulldist.t);
+end
+% one tailed p values (nb this calculation isn't exactly right since we are
+% actually working with an 'average' t across many splits and
+% discriminants. However, I think the rationale is that p is actually
+% conservative compared to what it should be. I guess comparisons with the
+% perm p values will show.
+res.ppara = tcdf(-res.t,sum(vertcat(model.nsamples))-1);
 [res.medianboot,res.medianste] = bootprctile(bootdist.t);
