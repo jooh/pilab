@@ -33,6 +33,18 @@ end
 
 % check for nans
 nanmask = ~any(isnan(epivol.data),1);
+if ~all(nanmask)
+    epivol = epivol(:,nanmask);
+end
+
+% intersect rois and designvol
+allok = epivol.mask & rois.mask;
+if ~isequal(allok,epivol.mask)
+    epivol = epivol(:,epivol.linind2featind(find(allok)));
+end
+if ~isequal(allok,rois.mask)
+    rois = rois(:,rois.linind2featind(find(allok)));
+end
 
 % set resampling once so all null distributions are yoked and can be
 % used to obtain difference distributions between ROIs or classifiers
@@ -58,7 +70,6 @@ bootdist = struct('cols_roi',cols_roi,'rows_contrast',rows_contrast,...
 
 % can't parfor here because epivol is likely too big to pass around
 for r = 1:rois.nsamples
-    fprintf('decoding roi %d of %d\n',r,rois.nsamples);
     % skip empty rois (these come out as NaN)
     validvox = full(rois.data(r,:)~=0) & nanmask;
     if ~any(validvox)
