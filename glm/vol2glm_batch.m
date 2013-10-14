@@ -17,7 +17,7 @@ function [glmcell,nancell] = vol2glm_batch(designvol,epivol,varargin)
 
 getArgs(varargin,{'sgolayK',[],'sgolayF',[],'split',[],...
     'covariatedeg',[],'targetlabels',{},'ignorelabels',{},...
-    'glmclass','GLM','glmvarargs',{}});
+    'glmclass','CovGLM','glmvarargs',{}});
 
 nchunks = epivol.desc.samples.nunique.chunks;
 
