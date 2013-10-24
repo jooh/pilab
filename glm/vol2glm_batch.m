@@ -119,6 +119,6 @@ end
 
 if usegpu
     for s = 1:nsplit
-        glmcell{s} = structdata2gpu(glmcell{s});
+        glmcell{s} = structdata2class(glmcell{s},'gpuArray');
     end
 end
