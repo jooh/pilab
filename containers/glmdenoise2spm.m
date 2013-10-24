@@ -49,4 +49,4 @@ for r = 1:nruns
     end
 end
 % make sure SPM.xY.P matches {SPM.xY.VY.fname}
-SPM.xY.P = char({SPM.xY.VY});
+SPM.xY.P = char({SPM.xY.VY.fname});
