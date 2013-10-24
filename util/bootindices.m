@@ -6,6 +6,11 @@
 % bootinds = bootindices(ncon,nboot)
 function bootinds = bootindices(ncon,nboot)
 
+if nboot==0
+    bootinds = [];
+    return;
+end
+
 npossible = (ncon^ncon) - ncon;
 if nboot > npossible
     warning(...
