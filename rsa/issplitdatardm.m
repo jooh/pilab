@@ -11,7 +11,10 @@ if ~isrdm(rdm)
     return;
 end
 
-if sum(~isnan(diag(rdm,-1)))~=1
-    yes = false;
-    return;
+nrdm = size(rdm,3);
+for n = 1:nrdm
+    if sum(~isnan(diag(rdm(:,:,n),-1)))~=1
+        yes = false;
+        return;
+    end
 end
