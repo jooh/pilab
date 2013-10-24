@@ -32,8 +32,6 @@ assert(isequal(concell{:}),...
 concell = concell{1};
 ncon = length(concell);
 nsub = length(subres);
-% so now we know what the group result is going to be like
-% (TODO - maybe support other data fields, e.g. median boot)
 dat = NaN([ncon nroi nsub]);
 groupres = struct('rows_contrast',{subres(1).rows_contrast},...
     'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]));
