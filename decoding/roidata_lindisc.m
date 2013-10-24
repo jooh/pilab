@@ -24,27 +24,18 @@ function [res,nulldist,bootdist] = roidata_lindisc(rois,designvol,epivol,contras
 ts = varargs2structfields(varargin,struct('sgolayK',[],'sgolayF',[],...
     'split',[],'covariatedeg','adaptive','targetlabels',[],...
     'ignorelabels','responses','glmclass','CovGLM','glmvarargs',[],...
-    'nperm',1,'nboot',0));
+    'nperm',1,'nboot',0,'usegpu',false));
 
 if ~iscell(ts.split)
     % so we can easily deal to cvgroup field later
     ts.split = num2cell(ts.split);
 end
 
-% check for nans
-nanmask = ~any(isnan(epivol.data),1);
-if ~all(nanmask)
-    epivol = epivol(:,nanmask);
-end
-
-% intersect rois and designvol
-allok = epivol.mask & rois.mask;
-if ~isequal(allok,epivol.mask)
-    epivol = epivol(:,epivol.linind2featind(find(allok)));
-end
-if ~isequal(allok,rois.mask)
-    rois = rois(:,rois.linind2featind(find(allok)));
-end
+% we now assume that the inputs are super clean (so that we can assume that
+% the data result will be in register with rois)
+assert(~any(isnan(epivol.data),1),'nans in epivol');
+assert(isequal(epivol.mask,rois.mask),...
+    'mismatched masks in epivol and rois');
 
 % set resampling once so all null distributions are yoked and can be
 % used to obtain difference distributions between ROIs or classifiers
@@ -53,7 +44,6 @@ bootinds = bootindices(designvol.desc.samples.nunique.chunks,ts.nboot);
 
 ncon = numel(contrasts);
 basedat = NaN([ncon rois.nsamples]);
-% transpose since ROIs will be in columns rather than rows now
 cols_roi = {asrow(rois.meta.samples.names)};
 rows_contrast = {ascol({contrasts.name})};
 
@@ -71,7 +61,7 @@ bootdist = struct('cols_roi',cols_roi,'rows_contrast',rows_contrast,...
 % can't parfor here because epivol is likely too big to pass around
 for r = 1:rois.nsamples
     % skip empty rois (these come out as NaN)
-    validvox = full(rois.data(r,:)~=0) & nanmask;
+    validvox = full(rois.data(r,:)~=0);
     if ~any(validvox)
         % empty roi
         fprintf('no valid voxels, skipping..\n');
@@ -86,7 +76,7 @@ for r = 1:rois.nsamples
         'sgolayK',ts.sgolayK,'sgolayF',ts.sgolayF,'split',[],...
         'covariatedeg',ts.covariatedeg,'targetlabels',ts.targetlabels,...
         'ignorelabels',ts.ignorelabels,'glmclass',ts.glmclass,...
-        'glmvarargs',ts.glmvarargs);
+        'glmvarargs',ts.glmvarargs,'usegpu',ts.usegpu);
     % nb model can still have multiple array entries
     model = model{1};
     [model.cvgroup] = ts.split{:};
