@@ -6,6 +6,7 @@ classdef RSA < GLM
         Xrdm % original model rdms before de-NaN and transforms
         datardm % original data rdms
         validvec % logical indices for mapping de-NaN'ed sample vector to full length
+        issplitdata = false; % split data RDMs invalidate some tests
     end
 
     methods
@@ -16,6 +17,7 @@ classdef RSA < GLM
             else
                 % store data in matrix form (for e.g. bootstrapping)
                 Xrdm = asrdmmat(modelrdms);
+                issplitdata = issplitdatardm(Xrdm);
                 datardm = asrdmmat(datardms);
                 [ncon,ncon,npredictors] = size(Xrdm);
                 % handle NaN content
@@ -23,15 +25,18 @@ classdef RSA < GLM
                 % first drop any conditions that are all NaNs (ie, all
                 % row/columns). For this, it's convenient to set the diagonal
                 % to true as well
-                nanx(repmat(logical(eye),[1 1 size(Xrdm,3)])) = true;
+                nanx(repmat(logical(eye(ncon)),[1 1 size(Xrdm,3)])) = true;
                 goodcon = arrayfun(@(x)~all(nanx(:,:,x),2),...
                     1:npredictors,'uniformoutput',false);
                 % nan conditions must be consistent across predictors
                 assert(npredictors==1 || isequal(goodcon{:}),...
                     'inconsistent nan rows across predictors');
                 % reduce to valid cons
-                Xrdm = Xrdm(goodcon{1},goodcon{1},:);
-                datardm = datardm(goodcon{1},goodcon{1},:);
+                goodcon = goodcon{1};
+                Xrdm = Xrdm(goodcon,goodcon,:);
+                % update ncon 
+                ncon = sum(goodcon);
+                datardm = datardm(goodcon,goodcon,:);
                 % convert to vector and strip NaNs
                 Xvec = rdm2vec(Xrdm);
                 datavec = rdm2vec(datardm);
@@ -46,8 +51,9 @@ classdef RSA < GLM
                 % note that we set nrandsamp to be ncon because randomisation
                 % of the samples is in fact randomisation on the RDM conditions
                 % (rows/columns) in RSA.
-                [gl.ncon,gl.Xrdm,gl.datardm,gl.validvec,gl.nrandsamp] = ...
-                    deal(ncon,Xrdm,datardm,~nanmask,ncon);
+                [gl.ncon,gl.Xrdm,gl.datardm,gl.validvec,gl.nrandsamp,...
+                    gl.issplitdata] = deal(ncon,Xrdm,datardm,~nanmask,...
+                    ncon,issplitdata);
             end
         end
 
@@ -63,6 +69,9 @@ classdef RSA < GLM
         % number of inds as self.ncon. Overrides GLM base class behaviour.
         %
         % model = drawpermsample(self,inds)
+            assert(~any([self.issplitdata]),['sample permutation test ' ...
+                'is invalid for split data model RDMs. Use a SplitRSA-' ...
+                'derived class instead']);
             permX = self(1).Xrdm(inds,inds,:);
             permglm = self.copy;
             for r = 1:length(permglm)
@@ -81,6 +90,9 @@ classdef RSA < GLM
         % be removed to avoid underestimating the variance (since data and
         % design will have matching zeros by definition). removedprop is a
         % diagnostic output of the proportion of removed dissimilarities.
+            assert(~any([self.issplitdata]),['sample bootstrap ' ...
+                'is invalid for split data model RDMs. Use a SplitRSA-' ...
+                'derived class instead']);
             assert(all(all(vertcat(self.data)~=0)),...
                 'cannot sample when zeros are present in data');
             % this approach assumes that zeros only happen in the data
@@ -112,6 +124,8 @@ classdef RSA < GLM
             end
             removedprop = (self(1).nsamples - bootglm(1).nsamples) / ...
                 self(1).nsamples;
+            assert([removedprop < 1,'bootsample removed everything. ' ...
+                'only one unique inds?']);
         end
 
         function model = selectconditions(self,cons)
