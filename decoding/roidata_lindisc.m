@@ -33,7 +33,7 @@ end
 
 % we now assume that the inputs are super clean (so that we can assume that
 % the data result will be in register with rois)
-assert(~any(isnan(epivol.data),1),'nans in epivol');
+assert(~any(isnan(epivol.data(:))),'nans in epivol');
 assert(isequal(epivol.mask,rois.mask),...
     'mismatched masks in epivol and rois');
 
@@ -89,29 +89,42 @@ for r = 1:rois.nsamples
 
     % get discriminants
     for c = 1:ncon
-        % permutation test
-        ptemp = nulldist.t(c,r,:);
-        parfor p = 1:ts.nperm
-            % draw a model (or just the original if p==1)
-            permmodel = drawpermrun(model,perminds(p,:));
-            raw = cvcrossclassificationrun(permmodel,'discriminant',...
+        % this extra if/else is a little redundant but it's good to avoid
+        % parfor overhead whenever possible
+        if ts.nperm < 2
+            raw = cvcrossclassificationrun(model,'discriminant',...
                 'infotmap',[],{contrasts(c).traincon},...
                 {contrasts(c).testcon});
             % average splits and discriminants
-            ptemp(1,1,p) = mean(raw(:));
-        end % p ts.nperm
-        nulldist.t(c,r,:) = ptemp;
-        % bootstrap
-        btemp = bootdist.t(c,r,:);
-        parfor b = 1:ts.nboot
-            bootmodel = model(bootinds(b,:));
-            raw = cvcrossclassificationrun(bootmodel,'discriminant',...
-                'infotmap',[],{contrasts(c).traincon},...
-                {contrasts(c).testcon});
-            % average splits and discriminants
-            btemp(1,1,b) = mean(raw(:));
+            nulldist.t(c,r,1) = mean(raw(:));
+        else
+            % permutation test
+            ptemp = nulldist.t(c,r,:);
+            parfor p = 1:ts.nperm
+                % draw a model (or just the original if p==1)
+                permmodel = drawpermrun(model,perminds(p,:));
+                raw = cvcrossclassificationrun(permmodel,'discriminant',...
+                    'infotmap',[],{contrasts(c).traincon},...
+                    {contrasts(c).testcon});
+                % average splits and discriminants
+                ptemp(1,1,p) = mean(raw(:));
+            end % p ts.nperm
+            nulldist.t(c,r,:) = ptemp;
         end
-        bootdist.t(c,r,:) = btemp;
+
+        if ts.nboot > 0
+            % bootstrap
+            btemp = bootdist.t(c,r,:);
+            parfor b = 1:ts.nboot
+                bootmodel = model(bootinds(b,:));
+                raw = cvcrossclassificationrun(bootmodel,'discriminant',...
+                    'infotmap',[],{contrasts(c).traincon},...
+                    {contrasts(c).testcon});
+                % average splits and discriminants
+                btemp(1,1,b) = mean(raw(:));
+            end
+            bootdist.t(c,r,:) = btemp;
+        end
     end % c ncon
 end % r rois.nsamples
 
