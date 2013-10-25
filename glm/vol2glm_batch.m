@@ -11,13 +11,14 @@
 % ignorelabels: labels to explicitly exclude (default none)
 % glmclass: char defining CovGLM sub-class (e.g. 'CovGLM')
 % glmvarargs: any additional arguments for GLM (e.g. k for RidgeGLM)
+% usegpu: initialise data as gpuArray (default false)
 %
-% [glmcell,nancell] = vol2glm_batch(designvol,epivol,varargin)
-function [glmcell,nancell] = vol2glm_batch(designvol,epivol,varargin)
+% [glmcell,nancell,predictornames] = vol2glm_batch(designvol,epivol,varargin)
+function [glmcell,nancell,predictornames] = vol2glm_batch(designvol,epivol,varargin)
 
 getArgs(varargin,{'sgolayK',[],'sgolayF',[],'split',[],...
     'covariatedeg',[],'targetlabels',{},'ignorelabels',{},...
-    'glmclass','GLM','glmvarargs',{}});
+    'glmclass','CovGLM','glmvarargs',{},'usegpu',false});
 
 nchunks = epivol.desc.samples.nunique.chunks;
 
@@ -79,6 +80,7 @@ ncon = length(coninds);
 %fprintf('storing estimates for %d conditions\n',ncon);
 
 designvol = designvol(:,coninds);
+predictornames = designvol.meta.features.labels;
 
 % empty cells don't get read properly
 if isempty(glmvarargs)
@@ -113,4 +115,10 @@ for s = 1:nsplit
     glmcell{s} = vol2glm(splitdesign,splitepi,glmclass,...
         covariatedeg,glmvarargs{:});
     nancell{s} = nanmask;
+end
+
+if usegpu
+    for s = 1:nsplit
+        glmcell{s} = structdata2class(glmcell{s},'gpuArray');
+    end
 end

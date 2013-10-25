@@ -1,4 +1,6 @@
-% RidgeGLM & RSA sub-class for regularised representational similarity analysis.
+% RankRSA & RidgeGLM sub-class for regularised representational similarity
+% analysis.
+%
 % gl = RidgeRSA(modelrdms,datardms,k)
 classdef RidgeRSA < RankRSA & RidgeGLM
     methods
@@ -13,7 +15,7 @@ classdef RidgeRSA < RankRSA & RidgeGLM
         end
 
         function cloneargs(self,oldinstance)
-            % make sure k parameter survives condition bootstrap.
+            % make sure k parameter survives resampling.
             [self.k] = deal(oldinstance.k);
         end
     end

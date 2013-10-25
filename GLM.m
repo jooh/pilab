@@ -43,7 +43,10 @@ classdef GLM < matlab.mixin.Copyable
         %
         % cmat = covmat()
             X = vertcat(self.X);
-            cmat = inv(X' * X);
+            cmat = X' * X \ eye(size(X,2));
+            % the classic way would use the inverse but this is slower and
+            % less precise in Matlab (and perhaps in general)
+            %cmat = inv(X' * X);
         end
 
         function d = df(self)
@@ -139,6 +142,29 @@ classdef GLM < matlab.mixin.Copyable
             t = contrast(self,conmat) ./ standarderror(self,conmat);
         end
 
+        function f = fmap(self,conmat)
+        % compute f statistic for the contrast vector (or matrix) in
+        % conmat. Uses various SPM8 functions internally (mostly lifted
+        % from spm_ancova)
+        %
+        % f = fmap(self,conmat)
+            est = fit(self);
+            ress2 = sum(residuals(self).^2,1);
+            % this sets up some mysterious structures upon which spm
+            % depends
+            xX = spm_sp('Set',vertcat(self.X));
+            xCon = spm_FcUtil('Set','','F','c',conmat',xX);
+            % good luck unpacking what's going on in the following.
+            % Hsqr - extra sum of squares of est from contrast (numerator
+            % in F test)
+            h = spm_FcUtil('Hsqr',xCon,xX);
+            X1o = spm_FcUtil('X1o',xCon,xX);
+            V = speye(sum([self.nsamples]));
+            [trRV, trRVRV] = spm_SpUtil('trRV',xX,V);
+            [trMV, trMVMV] = spm_SpUtil('trMV',X1o,V);
+            f = sum((h*est).^2,1)./(ress2*trMV/trRV);
+        end
+
         function p = pmap(self,conmat,tail)
         % return p values for each contrast vector (rows) in conmat. Tail
         % can be both (default), left or right.
@@ -181,7 +207,7 @@ classdef GLM < matlab.mixin.Copyable
                 selectfun = @max;
             end
             nvalues = length(values);
-            meds = NaN([nvalues self(1).nfeatures]);
+            meds = preallocate(self,[nvalues self(1).nfeatures]);
             for v = 1:nvalues
                 % set property in train and test
                 [self.(property)] = deal(values(v));
@@ -254,6 +280,7 @@ classdef GLM < matlab.mixin.Copyable
                 % do a self train/test to infer size of output
                 temp = self.(trainmeth)(trainargs{:});
                 outshape = size(self.(testmeth)(temp,testargs{:}));
+                clear temp
             end
             assert(numel(outshape)<3,...
                 'testmeth must return at most 2d outputs, got %s',...
@@ -263,7 +290,7 @@ classdef GLM < matlab.mixin.Copyable
             % 2*nsplit combinations to run
             nsplit = size(splits,1);
             assert(nsplit > 1,'can only crossvalidate if >1 run');
-            cvres = NaN([outshape nsplit]);
+            cvres = preallocate(self,[outshape nsplit]);
             for s = 1:nsplit
                 train = self(~splits(s,:));
                 test = self(splits(s,:));
@@ -310,7 +337,7 @@ classdef GLM < matlab.mixin.Copyable
             splits = preparerunsplits(self);
             nsplit = size(splits,1);
             assert(nsplit > 1,'can only crossvalidate if >1 run');
-            cvres = NaN([outshape nsplit]);
+            cvres = preallocate(self,[outshape nsplit]);
             for s = 1:nsplit
                 train = self(~splits(s,:));
                 test = self(splits(s,:));
@@ -362,7 +389,7 @@ classdef GLM < matlab.mixin.Copyable
             % update bootinds in case you asked for more than what's
             % possible
             nboot = size(bootinds,1);
-            bootest = NaN([outshape nboot]);
+            bootest = preallocate(self,[outshape nboot]);
             parfor b = 1:nboot
                 bootest(:,:,b) = self(bootinds(b,:)).(bootmeth);
             end
@@ -400,10 +427,10 @@ classdef GLM < matlab.mixin.Copyable
             assert(numel(outshape)<3,...
                 'permmeth must return at most 2d outputs, got %s',...
                 mat2str(outshape));
-            nulldist = NaN([outshape nperms]);
-            perminds = self.preparesampleperms(nperms);
+            nulldist = preallocate(self,[outshape nperms]);
+            perminds = preparesampleperms(self,nperms);
             for p = 1:size(perminds,1);
-                permd = self.drawpermsample(perminds(p,:));
+                permd = drawpermsample(self,perminds(p,:));
                 nulldist(:,:,p) = permd.(permmeth);
             end
         end
@@ -450,9 +477,9 @@ classdef GLM < matlab.mixin.Copyable
             % update bootinds in case you asked for more than what's
             % possible
             nboot = size(bootinds,1);
-            bootest = NaN([outshape nboot]);
+            bootest = preallocate(self,[outshape nboot]);
             parfor b = 1:nboot
-                bootd = self.drawbootsample(bootinds(b,:));
+                bootd = drawbootsample(self,bootinds(b,:));
                 bootest(:,:,b) = bootd.(bootmeth);
             end
         end
@@ -504,6 +531,21 @@ classdef GLM < matlab.mixin.Copyable
             % contrast estimate. If you estimated w on the same data this
             % is equivalent to the mahalanobis distance.
             mahdist = sqrt(diag(contrast(model,conmat)))';
+        end
+
+        function d = preallocate(self,shape)
+        % pre-allocate a matrix of NaNs with the same type as self.data.
+        % Normally this wouldn't require a custom method but unfortunately
+        % Matlab's NaN function doesn't support gpuArray class inputs at
+        % present. 
+        %
+        % d = preallocate(self,shape)
+            if isa(self(1).data,'gpuArray')
+                % gpu array is currently a special case
+                d = gpuArray.nan(shape,classUnderlying(self(1).data));
+            else
+                d = NaN(shape,class(self(1).data));
+            end
         end
     end
 end
