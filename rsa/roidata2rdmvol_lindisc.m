@@ -38,7 +38,7 @@ function disvol = roidata2rdmvol_lindisc(rois,designvol,epivol,varargin)
 ts = varargs2structfields(varargin,struct('sgolayK',[],'sgolayF',[],...
     'split',[],'covariatedeg',[],'targetlabels',{},'ignorelabels',{},...
     'glmclass','GLM','glmvarargs',{},'sterrunits',false,'crossvalidate',...
-    false));
+    false,'minvoxeln',0));
 
 if ~iscell(ts.ignorelabels)
     ts.ignorelabels = {ts.ignorelabels};
@@ -65,11 +65,19 @@ dissimilarities = NaN([nchoosek(n,2) rois.nsamples]);
 % check for nans
 nanmask = ~any(isnan(epivol.data),1);
 
+% pairwise contrasts
+conmat = allpairwisecontrasts(n);
+
 % compute result
-% to make this a parfor - need to put all the parameter setting etc outside
-% the loop. Ideally we should just call a function / method on every
-% iteration.
-parfor n = 1:rois.nsamples
+% try new syntax for speed
+
+% first pass outside parfor - make a model for each searchlight (uses lots
+% of memory so probably faster without parfor)
+models = cell(1,rois.nsamples);
+% DEBUG
+tic;
+fprintf('preparing model instances for %d ROIs\n',rois.nsamples);
+for n = 1:rois.nsamples
     % skip empty rois (these come out as NaN)
     validvox = full(rois.data(n,:)~=0) & nanmask;
     if ~any(validvox)
@@ -88,35 +96,56 @@ parfor n = 1:rois.nsamples
         'ignorelabels',ts.ignorelabels,'glmclass',ts.glmclass,...
         'glmvarargs',ts.glmvarargs);
     assert(numel(model)==1,'multiple glm instances')
-    % nb model can still have multiple array entries
-    model = model{1};
 
-    % fit the discriminants 
-    % pairwise contrasts
-    conmat = allpairwisecontrasts(model(1).npredictors);
-    % probably all this if checking should be done to set up some sort of
-    % constructor outside the loop. A very simple class or even a handle to
-    % on of multiple sub-functions would do it.
-    if ts.sterrunits
-        testmeth = 'infotmap';
-    else
-        testmeth = 'infomahalanobis';
+    if model{1}(1).nfeatures < ts.minvoxeln
+        % too small
+        continue
     end
-    if ts.crossvalidate
+
+    % nb model can still have multiple array entries
+    models{n} = model{1};
+end
+fprintf('preallocated models in %s\n',seconds2str(toc));
+
+if ts.sterrunits
+    testmeth = 'infotmap';
+else
+    testmeth = 'infomahalanobis';
+end
+
+% second pass - now we have a tiny cell array of packages for parfor
+tic;
+% this loop inside if construction is ugly but I suspect maximally speedy
+% to avoid any extra junk inside parfor
+if ts.crossvalidate
+    parfor n = 1:rois.nsamples
+        thismodel = models{n};
+        if isempty(thismodel)
+            % bad roi
+            continue
+        end
         % split defines crossvalidation split in GLM (NB in other contexts
         % split may get passed to vol2glm_batch instead to make one GLM
         % instance per split).
-        [model.cvgroup] = ts.split{:};
-        cvres = cvclassificationrun(model,'discriminant',testmeth,[],conmat);
+        [thismodel.cvgroup] = ts.split{:};
+        cvres = cvclassificationrun(thismodel,'discriminant',testmeth,...
+            [],conmat);
         % result - mean across splits
-        res = mean(cvres,3);
-    else
-        % just self-fit
-        w = discriminant(model,conmat);
-        res = feval(testmeth,model,w,conmat);
+        dissimilarities(:,n) = mean(cvres,3);
     end
-    dissimilarities(:,n) = res;
+else
+    parfor n = 1:rois.nsamples
+        thismodel = models{n};
+        if isempty(thismodel)
+            % bad roi
+            continue
+        end
+        % just self-fit
+        w = discriminant(thismodel,conmat);
+        dissimilarities(:,n) = feval(testmeth,thismodel,w,conmat);
+    end
 end
+fprintf('finished linear discriminant analysis in %s\n',seconds2str(toc));
 
 % convert to volume - here it is a problem that the result may have
 % different nfeatures than the mask (e.g. for ROI analysis or when we do
