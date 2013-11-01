@@ -40,7 +40,7 @@ ts = varargs2structfields(varargin,struct('sgolayK',[],'sgolayF',[],...
     'glmclass','GLM','glmvarargs',{},'sterrunits',false,'crossvalidate',...
     false,'minvoxeln',0));
 
-if ~iscell(ts.ignorelabels)
+if ~iscell(ts.ignorelabels) && ~isempty(ts.ignorelabels)
     ts.ignorelabels = {ts.ignorelabels};
 end
 
