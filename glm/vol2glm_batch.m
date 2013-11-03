@@ -20,76 +20,24 @@ getArgs(varargin,{'sgolayK',[],'sgolayF',[],'split',[],...
     'covariatedeg',[],'targetlabels',{},'ignorelabels',{},...
     'glmclass','CovGLM','glmvarargs',{},'usegpu',false});
 
-nchunks = epivol.desc.samples.nunique.chunks;
-
-% detrend before splitting
-if ~isempty(sgolayK)
-    assert(isempty(covariatedeg),['probably should not ' ...
-        'detrend and include trend covariates at the same time']);
-    fprintf('detrending (K=%d,F=%d)\n',sgolayK,sgolayF);
-    epivol.sgdetrend(sgolayK,sgolayF);
-    designvol.sgdetrend(sgolayK,sgolayF);
-end
-
-% find a reasonable polynomial degree
-if strcmp(covariatedeg,'adaptive')
-    covdegs = NaN([1 nchunks]);
-    for c = 1:nchunks
-        nvol = sum(epivol.meta.samples.chunks == ...
-            epivol.desc.samples.unique.chunks(c));
-        % Kay's rule for deciding on n covariates based on run
-        % duration.
-        covdegs(c) = round(nvol * epivol.frameperiod / 60 / 2);
-    end
-    assert(~any(isnan(covariatedeg)),...
-        'failed to identify covariatedeg');
-    % if we found a single deg that works for all runs, life is
-    % easy
-    if all(covdegs(1)==covdegs)
-        covariatedeg = covdegs(1);
-        %fprintf('adaptively selected covariate degree: %d\n',...
-            %covariatedeg);
-    else
-        % otherwise we need to add new functionality to CovGLM to
-        % support different covariatedeg for different runs.
-        error(['Adaptive covariate deg selection failed. ' ...
-            'Different covariates selected per run: ' ...
-            mat2str(covdegs)]);
-    end
-end
-
-% find correct labels
-nlabels = length(designvol.desc.features.unique.labels);
-if isempty(targetlabels)
-    coninds = 1:nlabels;
-else
-    coninds = find(strcmp(designvol.desc.features.unique.labels,...
-        targetlabels));
-end
-
-if ~isempty(ignorelabels)
-    ignoreinds = find(strcmp(designvol.desc.features.unique.labels,...
-        ignorelabels));
-    coninds = setdiff(coninds,ignoreinds,'stable');
-end
-
-assert(~isempty(coninds),...
-    'found no labels matching targetlabels/ignorelabels %s/%s',...
-    targetlabels,ignorelabels);
-ncon = length(coninds);
-%fprintf('storing estimates for %d conditions\n',ncon);
-
-designvol = designvol(:,coninds);
-predictornames = designvol.meta.features.labels;
-
 % empty cells don't get read properly
 if isempty(glmvarargs)
     glmvarargs = {};
 end
 
 % split the volumes
-[designcell,epicell] = splitvol(split,designvol,epivol);
+[designcell,epicell] = splitvol_batch(split,designvol,epivol,...
+    'sgolayK',sgolayK,'sgolayF',sgolayF,'split',split,'targetlabels',...
+    targetlabels,'ignorelabels',ignorelabels);
 nsplit = numel(designcell);
+
+% find a reasonable polynomial degree
+if strcmp(covariatedeg,'adaptive')
+    covariatedeg = vol2covdeg(epivol);
+end
+
+assert(isempty(sgolayK) || isempty(covariatedeg),['probably should not ' ...
+    'detrend and include trend covariates at the same time']);
 
 glmcell = cell(nsplit,1);
 nancell = cell(nsplit,1);
