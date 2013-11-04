@@ -11,20 +11,13 @@
 %
 % named varargs:
 %
-% (these get passed to vol2glm_batch)
-% sgolayK: degree of optional Savitsky-Golay detrend 
-% sgolayF: filter size of optional Savitsky-Golay detrend
-% covariatedeg: polynomial detrend degree (or 'adaptive')
-% targetlabels: labels to explicitly include (default all)
-% ignorelabels: labels to explicitly exclude (default none)
 % glmclass: char defining CovGLM sub-class (e.g. 'CovGLM')
 % glmvarargs: any additional arguments for GLM (e.g. k for RidgeGLM)
-%
-% (these are used in this function)
 % split: indices to define GLM cvgroups (if crossvalidate) - NB NOT used in
 %   vol2glm_batch
 % sterrunits: scale by standard error (default false)
 % crossvalidate: get split data discriminant (default false)
+% batchsize: number of ROIs to run in one call to parfor (default 5000)
 % 
 % The gist of these options are:
 % ~split && ~sterrunits = mahalanobis distance
@@ -35,14 +28,10 @@
 % disvol = roidata2rdmvol_lindisc(rois,designvol,epivol,[varargin])
 function disvol = roidata2rdmvol_lindisc(rois,designvol,epivol,varargin)
 
-ts = varargs2structfields(varargin,struct('sgolayK',[],'sgolayF',[],...
-    'split',[],'covariatedeg',[],'targetlabels',{},'ignorelabels',{},...
+ts = varargs2structfields(varargin,struct(...
+    'split',[],'covariatedeg',[],...
     'glmclass','GLM','glmvarargs',{},'sterrunits',false,'crossvalidate',...
-    false,'minvoxeln',0));
-
-if ~iscell(ts.ignorelabels) && ~isempty(ts.ignorelabels)
-    ts.ignorelabels = {ts.ignorelabels};
-end
+    false,'minvoxeln',0,'batchsize',5000));
 
 if ~iscell(ts.split)
     % so we can easily deal to cvgroup field later
@@ -50,62 +39,14 @@ if ~iscell(ts.split)
 end
 
 % preallocate result (dissimilarity by roi)
-% uh oh - it's actually not trivial knowing how many predictors we have
-% now.
-if isempty(ts.targetlabels)
-    n = designvol.nfeatures - numel(ts.ignorelabels);
-else
-    % probably not terribly robust. 
-    n = numel(ts.targetlabels) - numel(ts.ignorelabels);
-    warning('uncharted waters - targetlabels defines dissimilarities size');
-end
-
-dissimilarities = NaN([nchoosek(n,2) rois.nsamples]);
+dissimilarities = NaN([nchoosek(designvol.nfeatures,2) rois.nsamples],...
+    class(epivol.data));
 
 % check for nans
 nanmask = ~any(isnan(epivol.data),1);
 
 % pairwise contrasts
-conmat = allpairwisecontrasts(n);
-
-% compute result
-% try new syntax for speed
-
-% first pass outside parfor - make a model for each searchlight (uses lots
-% of memory so probably faster without parfor)
-models = cell(1,rois.nsamples);
-% DEBUG
-tic;
-fprintf('preparing model instances for %d ROIs\n',rois.nsamples);
-for n = 1:rois.nsamples
-    % skip empty rois (these come out as NaN)
-    validvox = full(rois.data(n,:)~=0) & nanmask;
-    if ~any(validvox)
-        % empty roi
-        continue
-    end
-
-    % make the GLM instance for this ROI - always a cell array with one
-    % entry (since we disable the split parameter under the assumption that
-    % you've already used it to do a splitvol before this)
-    % we skip nancell output because the data are assumed to be nan-less if
-    % they made it past the validvox check
-    model = vol2glm_batch(designvol,epivol(:,validvox),...
-        'sgolayK',ts.sgolayK,'sgolayF',ts.sgolayF,'split',[],...
-        'covariatedeg',ts.covariatedeg,'targetlabels',ts.targetlabels,...
-        'ignorelabels',ts.ignorelabels,'glmclass',ts.glmclass,...
-        'glmvarargs',ts.glmvarargs);
-    assert(numel(model)==1,'multiple glm instances')
-
-    if model{1}(1).nfeatures < ts.minvoxeln
-        % too small
-        continue
-    end
-
-    % nb model can still have multiple array entries
-    models{n} = model{1};
-end
-fprintf('preallocated models in %s\n',seconds2str(toc));
+conmat = feval(class(epivol.data),allpairwisecontrasts(designvol.nfeatures));
 
 if ts.sterrunits
     testmeth = 'infotmap';
@@ -113,39 +54,75 @@ else
     testmeth = 'infomahalanobis';
 end
 
-% second pass - now we have a tiny cell array of packages for parfor
-tic;
-% this loop inside if construction is ugly but I suspect maximally speedy
-% to avoid any extra junk inside parfor
-if ts.crossvalidate
-    parfor n = 1:rois.nsamples
-        thismodel = models{n};
-        if isempty(thismodel)
-            % bad roi
-            continue
-        end
-        % split defines crossvalidation split in GLM (NB in other contexts
-        % split may get passed to vol2glm_batch instead to make one GLM
-        % instance per split).
-        [thismodel.cvgroup] = ts.split{:};
-        cvres = cvclassificationrun(thismodel,'discriminant',testmeth,...
-            [],conmat);
-        % result - mean across splits
-        dissimilarities(:,n) = mean(cvres,3);
+% pad out last batch with NaNs
+batchinds = [1:rois.nsamples ...
+    NaN([1 ts.batchsize-rem(rois.nsamples,ts.batchsize)])];
+batchmat = reshape(batchinds,...
+    [ts.batchsize ceil(rois.nsamples/ts.batchsize)]);
+nbatch = size(batchmat,2);
+
+% around .144s per ROI if 100 ROIs
+% around 2:13 for 1000 ROIs = 0.133 s per ROI
+% for 5000 = 
+
+% batch out ROIs to allow a smaller epivol. Avoids Matlab memory problems
+% when parfor involves > 2GB of data and avoids passing a huge epivol
+% around when only a small part of it will actually be used.
+for batch = 1:nbatch
+    fprintf('running RDMs for batch %d of %d...\n',batch,nbatch);
+    tic;
+    if any(isnan(batchmat(:,batch)))
+        thisbatchsize = find(isnan(batchmat(:,batch)),1,'first')-1;
+    else
+        thisbatchsize = ts.batchsize;
     end
-else
-    parfor n = 1:rois.nsamples
-        thismodel = models{n};
-        if isempty(thismodel)
-            % bad roi
-            continue
+    % voxels in any roi and not nan
+    batchvox = any(full(rois.data(batchmat(1:thisbatchsize,batch),:)~=0)...
+        ,1) & nanmask;
+    % pick these for batch-specific epivol
+    % may need linind2featind here
+    batchepis = epivol(:,batchvox);
+    batchrois = rois(:,batchvox);
+    assert(numel(batchvox)==epivol.nfeatures,'mismatched mask and data');
+    assert(numel(batchvox)==rois.nfeatures,'mismatched mask and data');
+    roimat = batchrois.data;
+
+    % now we should just be able to run parfor directly
+    if ts.crossvalidate
+        parfor b = batchmat(1:thisbatchsize,batch)'
+            % skip empty rois (these come out as NaN)
+            validvox = full(roimat(batchinds(b),:)~=0);
+            if ~any(validvox) || sum(validvox)<ts.minvoxeln
+                % empty or too small roi
+                continue
+            end
+            thismodel = givememodel(designvol,batchepis,ts,validvox);
+            % split defines crossvalidation split in GLM (NB in other contexts
+            % split may get passed to vol2glm_batch instead to make one GLM
+            % instance per split).
+            [thismodel.cvgroup] = ts.split{:};
+            cvres = cvclassificationrun(thismodel,'discriminant',testmeth,...
+                [],conmat);
+            % result - mean across splits
+            dissimilarities(:,b) = mean(cvres,3);
         end
-        % just self-fit
-        w = discriminant(thismodel,conmat);
-        dissimilarities(:,n) = feval(testmeth,thismodel,w,conmat);
+    else
+        parfor b = batchmat(1:thisbatchsize,batch)'
+            % skip empty rois (these come out as NaN)
+            validvox = full(roimat(batchinds(b),:)~=0);
+            if ~any(validvox) || sum(validvox)<ts.minvoxeln
+                % empty or too small roi
+                continue
+            end
+            thismodel = givememodel(designvol,batchepis,ts,validvox);
+            % just self-fit
+            w = discriminant(thismodel,conmat);
+            dissimilarities(:,b) = feval(testmeth,thismodel,...
+                w,conmat);
+        end
     end
+    fprintf('finished batch in %s\n',seconds2str(toc));
 end
-fprintf('finished linear discriminant analysis in %s\n',seconds2str(toc));
 
 % convert to volume - here it is a problem that the result may have
 % different nfeatures than the mask (e.g. for ROI analysis or when we do
@@ -170,3 +147,10 @@ else
         'names',{rois.meta.samples.names'},'centreofmass',{coords},...
         'nfeatures',nvox),'header',rois.header);
 end
+
+function thismodel = givememodel(designvol,epivol,ts,validvox)
+
+% now we can speed things up by running the lighter vol2glm instead of
+% vol2glm because most of the prepping should already be done
+thismodel = vol2glm(designvol,epivol(:,validvox),ts.glmclass,...
+    ts.glmvarargs{:});
