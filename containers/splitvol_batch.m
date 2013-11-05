@@ -12,7 +12,7 @@
 % [designcell,epicell] = splitvol_batch(split,designvol,epivol,varargin)
 function [designcell,epicell] = splitvol_batch(split,designvol,epivol,varargin)
 
-getArgs(varargin,{'sgolayK',[],'sgolayF',[],'split',[],'targetlabels',{},...
+getArgs(varargin,{'sgolayK',[],'sgolayF',[],'targetlabels',{},...
     'ignorelabels',{}});
 
 nchunks = epivol.desc.samples.nunique.chunks;
@@ -52,4 +52,3 @@ predictornames = designvol.meta.features.labels;
 
 % split the volumes
 [designcell,epicell] = splitvol(split,designvol,epivol);
-nsplit = numel(designcell);
