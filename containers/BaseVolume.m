@@ -98,47 +98,42 @@ classdef BaseVolume < handle
                 metafeatures);
         end
 
+        function processchunks(self,fname,varargin)
+        % general method for fevaling some fname which takes sample data
+        % from each chunk as a first input and anything else in the
+        % following.
+        %
+        % processchunks(self,fname,[varargin])
+            for c = 1:self.desc.samples.nunique.chunks
+                chunkind = self.meta.samples.chunks == ...
+                    self.desc.samples.unique.chunks(c);
+                self.data(chunkind,:) = feval(fname,...
+                    self.data(chunkind,:),varargin{:});
+            end
+        end
+
         function medianfilter(self,n)
         % medianfilter(n)
         % filter the data in place along the sample dimension (time) with
         % filter size n. Operates separately on each chunk.
-            for c = 1:self.desc.samples.nunique.chunks
-                chunkind = self.meta.samples.chunks == ...
-                    self.desc.samples.unique.chunks(c);
-                self.data(chunkind,:) = medianfilter(...
-                    self.data(chunkind,:),n);
-            end
+            processchunks(self,'medianfilter',n);
         end
 
         function sgdetrend(self,k,f)
             % use a Savitzky-Golay filter to detrend the data across time.
             % Operates separately on each chunk
-            for c = 1:self.desc.samples.nunique.chunks
-                chunkind = self.meta.samples.chunks == ...
-                    self.desc.samples.unique.chunks(c);
-                self.data(chunkind,:) = self.data(chunkind,:) - ...
-                    sgolayfilt(self.data(chunkind,:),k,f,[],1);
-            end
+            processchunks(self,@(data,k,f)data-sgolayfilt(data,k,f,[],...
+                1),k,f);
         end
 
         function sgfilter(self,k,f)
-            for c = 1:self.desc.samples.nunique.chunks
-                chunkind = self.meta.samples.chunks == ...
-                    self.desc.samples.unique.chunks(c);
-                self.data(chunkind,:) = sgolayfilt(...
-                    self.data(chunkind,:),k,f,[],1);
-            end
+            processchunks(self,'sgolayfilt',k,f,[],1);
         end
 
         function zscore(self)
             % Zscore the data across time, operating separately on each
             % chunk.
-            for c = 1:self.desc.samples.nunique.chunks
-                chunkind = self.meta.samples.chunks == ...
-                    self.desc.samples.unique.chunks(c);
-                self.data(chunkind,:) = zscore(self.data(chunkind,:),[],...
-                    1);
-            end
+            processchunks(self,'zscore',[],1);
         end
 
         function checkmeta(self)
