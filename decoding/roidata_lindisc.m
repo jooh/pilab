@@ -4,12 +4,6 @@
 %
 % Named inputs:
 %
-% (for vol2glm_batch)
-% sgolayK: degree of optional Savitsky-Golay detrend 
-% sgolayF: filter size of optional Savitsky-Golay detrend
-% covariatedeg: polynomial detrend degree (or 'adaptive')
-% targetlabels: labels to explicitly include (default all)
-% ignorelabels: labels to explicitly exclude (default none)
 % glmclass: char defining CovGLM sub-class (e.g. 'CovGLM')
 % glmvarargs: any additional arguments for GLM (e.g. k for RidgeGLM)
 %
@@ -21,10 +15,9 @@
 % [res,nulldist,bootdist] = roidata_lindisc(rois,designvol,epivol,contrasts,varargin)
 function [res,nulldist,bootdist] = roidata_lindisc(rois,designvol,epivol,contrasts,varargin)
 
-ts = varargs2structfields(varargin,struct('sgolayK',[],'sgolayF',[],...
-    'split',[],'covariatedeg','adaptive','targetlabels',[],...
-    'ignorelabels','responses','glmclass','CovGLM','glmvarargs',[],...
-    'nperm',1,'nboot',0,'usegpu',false));
+ts = varargs2structfields(varargin,struct(...
+    'split',[],'glmclass','GLM','glmvarargs',[],...
+    'nperm',1,'nboot',0));
 
 if ~iscell(ts.split)
     % so we can easily deal to cvgroup field later
@@ -72,13 +65,9 @@ for r = 1:rois.nsamples
     % (we will need to strip out 0 cons eventually for speed - maybe move
     % this inside contrast loop and apply a skipcon that gets applied just
     % before volume stage?)
-    model = vol2glm_batch(designvol,epivol(:,validvox),...
-        'sgolayK',ts.sgolayK,'sgolayF',ts.sgolayF,'split',[],...
-        'covariatedeg',ts.covariatedeg,'targetlabels',ts.targetlabels,...
-        'ignorelabels',ts.ignorelabels,'glmclass',ts.glmclass,...
-        'glmvarargs',ts.glmvarargs,'usegpu',ts.usegpu);
+    model = vol2glm(designvol,epivol(:,validvox),ts.glmclass,...
+        ts.glmvarargs{:});
     % nb model can still have multiple array entries
-    model = model{1};
     [model.cvgroup] = ts.split{:};
     res.nfeatures(r) = model.nfeatures;
 

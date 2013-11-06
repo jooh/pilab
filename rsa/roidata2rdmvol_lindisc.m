@@ -11,7 +11,7 @@
 %
 % named varargs:
 %
-% glmclass: char defining CovGLM sub-class (e.g. 'CovGLM')
+% glmclass: char defining GLM class (default GLM)
 % glmvarargs: any additional arguments for GLM (e.g. k for RidgeGLM)
 % split: indices to define GLM cvgroups (if crossvalidate) - NB NOT used in
 %   vol2glm_batch
@@ -29,7 +29,7 @@
 function disvol = roidata2rdmvol_lindisc(rois,designvol,epivol,varargin)
 
 ts = varargs2structfields(varargin,struct(...
-    'split',[],'covariatedeg',[],...
+    'split',[],...
     'glmclass','GLM','glmvarargs',{},'sterrunits',false,'crossvalidate',...
     false,'minvoxeln',0,'batchsize',5000));
 

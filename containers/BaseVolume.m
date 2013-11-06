@@ -98,12 +98,12 @@ classdef BaseVolume < handle
                 metafeatures);
         end
 
-        function processchunks(self,fname,varargin)
+        function filterbychunk(self,fname,varargin)
         % general method for fevaling some fname which takes sample data
         % from each chunk as a first input and anything else in the
         % following.
         %
-        % processchunks(self,fname,[varargin])
+        % filterbychunk(self,fname,[varargin])
             for c = 1:self.desc.samples.nunique.chunks
                 chunkind = self.meta.samples.chunks == ...
                     self.desc.samples.unique.chunks(c);
@@ -112,28 +112,15 @@ classdef BaseVolume < handle
             end
         end
 
-        function medianfilter(self,n)
-        % medianfilter(n)
-        % filter the data in place along the sample dimension (time) with
-        % filter size n. Operates separately on each chunk.
-            processchunks(self,'medianfilter',n);
-        end
-
         function sgdetrend(self,k,f)
             % use a Savitzky-Golay filter to detrend the data across time.
             % Operates separately on each chunk
-            processchunks(self,@(data,k,f)data-sgolayfilt(data,k,f,[],...
+            filterbychunk(self,@(data,k,f)data-sgolayfilt(data,k,f,[],...
                 1),k,f);
         end
 
         function sgfilter(self,k,f)
-            processchunks(self,'sgolayfilt',k,f,[],1);
-        end
-
-        function zscore(self)
-            % Zscore the data across time, operating separately on each
-            % chunk.
-            processchunks(self,'zscore',[],1);
+            filterbychunk(self,'sgolayfilt',k,f,[],1);
         end
 
         function checkmeta(self)

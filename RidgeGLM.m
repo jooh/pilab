@@ -1,22 +1,19 @@
-% CovGLM sub-class for regularised ridge fits.
-% gl = RidgeGLM(X,data,k,[unscale],[covariatedegree]);
-classdef RidgeGLM < CovGLM
+% GLM sub-class for regularised ridge fits.
+% gl = RidgeGLM(X,data,k,[unscale])
+classdef RidgeGLM < GLM
     properties
         k % regularisation parameter (gets scaled by k*nsamples in ridgevec)
         unscale % return data to original scale (default 0)
     end
 
     methods
-        function gl = RidgeGLM(X,data,k,unscale,covariatedegree)
+        function gl = RidgeGLM(X,data,k,unscale)
             if nargin == 0
                 % support no input case
                 [X,data,k] = deal([]);
             end
             % initialise with super-class constructor
-            if ieNotDefined('covariatedegree')
-                covariatedegree = [];
-            end
-            gl = gl@CovGLM(X,data,covariatedegree);
+            gl = gl@GLM(X,data);
             gl.k = k;
             if ieNotDefined('unscale')
                 unscale = 0;
