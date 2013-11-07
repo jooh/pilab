@@ -10,10 +10,6 @@
 % glm = vol2glm(designvol,datavol,glmclass,glmargs)
 function glm = vol2glm(designvol,datavol,glmclass,varargin)
 
-if ieNotDefined('glmclass')
-    glmclass = 'GLM';
-end
-
 chunks = designvol.desc.samples.unique.chunks;
 labels = designvol.meta.features.labels;
 for c = 1:designvol.desc.samples.nunique.chunks
