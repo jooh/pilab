@@ -61,9 +61,11 @@ batchmat = reshape(batchinds,...
     [ts.batchsize ceil(rois.nsamples/ts.batchsize)]);
 nbatch = size(batchmat,2);
 
-% around .144s per ROI if 100 ROIs
-% around 2:13 for 1000 ROIs = 0.133 s per ROI
-% for 5000 = 
+assert(isequal(epivol.xyz,rois.xyz),'mismatched roi/epivol');
+assert(isequal(epivol.meta.samples.chunks,designvol.meta.samples.chunks),...
+    'mismatched epivol/designvol');
+% now store just array data for extra speed
+designmat = designvol.data;
 
 % batch out ROIs to allow a smaller epivol. Avoids Matlab memory problems
 % when parfor involves > 2GB of data and avoids passing a huge epivol
@@ -85,7 +87,11 @@ for batch = 1:nbatch
     batchrois = rois(:,batchvox);
     assert(numel(batchvox)==epivol.nfeatures,'mismatched mask and data');
     assert(numel(batchvox)==rois.nfeatures,'mismatched mask and data');
+
+    % just arrays for speed
+    chunks = epivol.meta.samples.chunks;
     roimat = batchrois.data;
+    epimat = batchepis.data;
 
     % now we should just be able to run parfor directly
     if ts.crossvalidate
@@ -96,7 +102,8 @@ for batch = 1:nbatch
                 % empty or too small roi
                 continue
             end
-            thismodel = givememodel(designvol,batchepis,ts,validvox);
+            thismodel = array2glm(designmat,epimat(:,validvox),chunks,...
+                ts.glmclass,ts.glmvarargs{:});
             % split defines crossvalidation split in GLM (NB in other contexts
             % split may get passed to vol2glm_batch instead to make one GLM
             % instance per split).
@@ -114,7 +121,8 @@ for batch = 1:nbatch
                 % empty or too small roi
                 continue
             end
-            thismodel = givememodel(designvol,batchepis,ts,validvox);
+            thismodel = array2glm(designmat,epimat(:,validvox),chunks,...
+                ts.glmclass,ts.glmvarargs{:});
             % just self-fit
             w = discriminant(thismodel,conmat);
             dissimilarities(:,b) = feval(testmeth,thismodel,...
@@ -147,10 +155,3 @@ else
         'names',{rois.meta.samples.names'},'centreofmass',{coords},...
         'nfeatures',nvox),'header',rois.header);
 end
-
-function thismodel = givememodel(designvol,epivol,ts,validvox)
-
-% now we can speed things up by running the lighter vol2glm instead of
-% vol2glm because most of the prepping should already be done
-thismodel = vol2glm(designvol,epivol(:,validvox),ts.glmclass,...
-    ts.glmvarargs{:});
