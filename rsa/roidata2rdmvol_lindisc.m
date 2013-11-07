@@ -71,7 +71,7 @@ designmat = designvol.data;
 % when parfor involves > 2GB of data and avoids passing a huge epivol
 % around when only a small part of it will actually be used.
 for batch = 1:nbatch
-    fprintf('running RDMs for batch %d of %d...\n',batch,nbatch);
+    fprintf('running RDMs for batch %d of %d... ',batch,nbatch);
     tic;
     if any(isnan(batchmat(:,batch)))
         thisbatchsize = find(isnan(batchmat(:,batch)),1,'first')-1;
@@ -129,7 +129,7 @@ for batch = 1:nbatch
                 w,conmat);
         end
     end
-    fprintf('finished batch in %s\n',seconds2str(toc));
+    fprintf('finished in %s\n',seconds2str(toc));
 end
 
 % convert to volume - here it is a problem that the result may have
