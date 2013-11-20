@@ -1,3 +1,7 @@
+% insure that a set of volume instances contain the same features. Also
+% removes nans.
+%
+% varargout = intersectvols(varargin)
 function varargout = intersectvols(varargin)
 
 if ~nargin
