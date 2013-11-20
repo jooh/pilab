@@ -42,8 +42,8 @@ end
 dissimilarities = NaN([nchoosek(designvol.nfeatures,2) rois.nsamples],...
     class(epivol.data));
 
-% check for nans
-nanmask = ~any(isnan(epivol.data),1);
+% check for nans (now we assume nan-less inputs)
+assert(~any(isnan(epivol.data(:))),'nans in epivol');
 
 % pairwise contrasts
 conmat = feval(class(epivol.data),allpairwisecontrasts(designvol.nfeatures));
@@ -80,7 +80,7 @@ for batch = 1:nbatch
     end
     % voxels in any roi and not nan
     batchvox = any(full(rois.data(batchmat(1:thisbatchsize,batch),:)~=0)...
-        ,1) & nanmask;
+        ,1);
     % pick these for batch-specific epivol
     % may need linind2featind here
     batchepis = epivol(:,batchvox);
