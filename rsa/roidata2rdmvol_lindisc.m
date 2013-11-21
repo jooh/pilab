@@ -107,7 +107,9 @@ for batch = 1:nbatch
             % split defines crossvalidation split in GLM (NB in other contexts
             % split may get passed to vol2glm_batch instead to make one GLM
             % instance per split).
-            [thismodel.cvgroup] = ts.split{:};
+            if ~isempty(ts.split)
+                [thismodel.cvgroup] = ts.split{:};
+            end
             cvres = cvclassificationrun(thismodel,'discriminant',testmeth,...
                 [],conmat);
             % result - mean across splits
