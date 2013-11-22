@@ -16,7 +16,7 @@
 function [res,nulldist,bootdist] = roidata_lindisc(rois,designvol,epivol,contrasts,varargin)
 
 ts = varargs2structfields(varargin,struct(...
-    'split',[],'glmclass','GLM','glmvarargs',[],...
+    'split',[],'glmclass','GLM','glmvarargs',{},...
     'nperm',1,'nboot',0));
 
 if ~iscell(ts.split)
@@ -68,7 +68,9 @@ for r = 1:rois.nsamples
     model = vol2glm(designvol,epivol(:,validvox),ts.glmclass,...
         ts.glmvarargs{:});
     % nb model can still have multiple array entries
-    [model.cvgroup] = ts.split{:};
+    if ~isempty(ts.split)
+        [model.cvgroup] = ts.split{:};
+    end
     res.nfeatures(r) = model.nfeatures;
 
     % permute design matrix
