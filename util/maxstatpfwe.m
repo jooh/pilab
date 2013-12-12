@@ -1,6 +1,6 @@
 % Return the nichols / holmes p value for a null distribution
-% pfwe = maxstatpfwe(nulldist)
-function pfwe = maxstatpfwe(nulldist)
+% [pfwe,pthresh] = maxstatpfwe(nulldist)
+function [pfwe,pthresh] = maxstatpfwe(nulldist)
 
 [nperms,ndata] = size(nulldist);
 
@@ -15,3 +15,5 @@ maxstats = max(nulldist,[],2);
 % calculation)
 pfwe = sum(repmat(maxstats,[1 ndata]) > repmat(truestat,[nperms 1]),1) ...
     / nperms;
+
+pthresh = prctile(maxstats,95);
