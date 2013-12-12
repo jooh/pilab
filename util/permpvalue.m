@@ -12,11 +12,14 @@ end
 permdim = ndims(permdist);
 datadims = size(permdist);
 
+% there must be a more general way
 switch permdim
     case 2
         truerep = repmat(permdist(:,1),[1 datadims(permdim)]);
     case 3
         truerep = repmat(permdist(:,:,1),[1 1 datadims(permdim)]);
+    case 4
+        truerep = repmat(permdist(:,:,:,1),[1 1 1 datadims(permdim)]);
     otherwise
         error('no permpvalue support for %d inputs',permdim);
 end
@@ -33,4 +36,9 @@ switch tail
     otherwise
         error('unknown tail: %s',tail);
 end
-p = ngreater / datadims(permdim);
+
+% adjust for nan perms
+nvalid = datadims(permdim) - sum(isnan(permdist),permdim);
+p = ngreater ./ nvalid;
+% if nvalid==0 you get inf above
+p(isinf(p)) = NaN;
