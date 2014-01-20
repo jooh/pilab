@@ -396,7 +396,7 @@ classdef GLM < matlab.mixin.Copyable
         end
 
         function model = drawpermsample(self,inds)
-        % return a new instance where the samples in X have been re-ordered
+        % return a new instance where the data has been re-ordered
         % according to inds. Note that you must supply the same number of
         % inds as self.nsamples.
         %
@@ -405,12 +405,30 @@ classdef GLM < matlab.mixin.Copyable
                 'got %d inds for %d samples',numel(inds),self(1).nsamples);
             model = self.copy;
             for r = 1:length(self)
-                model(r).X = model(r).X(inds,:);
+                model(r).data = model(r).data(inds,:);
+            end
+        end
+
+        function model = drawpermflipsample(self,inds)
+        % return a new instance where the data has been sign flipped
+        % according to logical indices in inds. Note that you must supply
+        % the same number of inds as self.nsamples.
+        %
+        % model = drawpermflipsample(self,inds)
+            assert(numel(inds)==self(1).nsamples,...
+                'got %d inds for %d samples',numel(inds),self(1).nsamples);
+            model = self.copy;
+            for r = 1:length(self)
+                model(r).data(inds,:) = model(r).data(inds,:) * -1;
             end
         end
 
         function inds = preparesampleperms(self,nperms)
             inds = permuteindices(self(1).nrandsamp,nperms);
+        end
+
+        function inds = preparesamplepermflips(self,nperms)
+            inds = permflipindices(self(1).nrandsamp,nperms);
         end
 
         function nulldist = permutesamples(self,nperms,permmeth,outshape)
@@ -431,6 +449,28 @@ classdef GLM < matlab.mixin.Copyable
             perminds = preparesampleperms(self,nperms);
             for p = 1:size(perminds,1);
                 permd = drawpermsample(self,perminds(p,:));
+                nulldist(:,:,p) = permd.(permmeth);
+            end
+        end
+
+        function nulldist = permflipsamples(self,nperms,permmeth,outshape)
+        % generate a null distribution of some permmeth (e.g., fit) by
+        % flipping the sign order of the samples in the data.
+        % Note that the same random resample is applied to the data in each
+        % run. If outshape is undefined we infer it. The returned nulldist
+        % is outshape by nperms.
+        %
+        % nulldist = permflipsamples(self,nperms,permmeth,outshape)
+            if ieNotDefined('outshape')
+                outshape = size(self.(permmeth));
+            end
+            assert(numel(outshape)<3,...
+                'permmeth must return at most 2d outputs, got %s',...
+                mat2str(outshape));
+            nulldist = preallocate(self,[outshape nperms]);
+            perminds = preparesamplepermflips(self,nperms);
+            for p = 1:size(perminds,1);
+                permd = drawpermflipsample(self,perminds(p,:));
                 nulldist(:,:,p) = permd.(permmeth);
             end
         end
