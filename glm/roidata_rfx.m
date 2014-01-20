@@ -10,17 +10,25 @@
 % transform to the data before doing the rfx analysis (e.g. 'atanh' for
 % fisher transform, or something like @(x)x-.5 to mean correct proportion
 % correct classification performance).
+% assumeregister: false (if true, we just stack the single subject results,
+% consequences be damned)
 %
-% meanres = roidata_rfx(subres,[varargin])
-function meanres = roidata_rfx(subres,varargin)
+% [meanres,nulldist,bootdist] = roidata_rfx(subres,[varargin])
+function [meanres,nulldist,bootdist] = roidata_rfx(subres,varargin)
     
-getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','t','transfun',[]});
+getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','t','transfun',[],...
+    'assumeregister',false});
 
-% find all possible ROIs (not all subjects will have all ROIs
-% necessarily)
-allrois = {subres.cols_roi};
-allrois = horzcat(allrois{:});
-urois = unique(allrois);
+if assumeregister
+    % just take rois from first subject
+    urois = subres(1).cols_roi;
+else
+    % find all possible ROIs (not all subjects will have all ROIs
+    % necessarily)
+    allrois = {subres.cols_roi};
+    allrois = horzcat(allrois{:});
+    urois = unique(allrois);
+end
 nroi = length(urois);
 
 % but we do assume that contrasts are identical.  we could support
@@ -37,13 +45,21 @@ groupres = struct('rows_contrast',{subres(1).rows_contrast},...
     'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]));
 
 % populate the groupres struct
-for s = 1:nsub
-    for r = 1:length(subres(s).cols_roi)
-        thisroi = subres(s).cols_roi{r};
-        indroi = strcmp(groupres.cols_roi,thisroi);
-        groupres.(targetfield)(:,indroi,s) = subres(s).(targetfield)(:,r);
-        if isfield(groupres,'nfeatures')
-            groupres.nfeatures(1,indroi,s) = subres(s).nfeatures(1,r);
+if assumeregister
+    % hey, this is easy
+    groupres.(targetfield) = cat(3,subres.(targetfield));
+    assert(~any(isnan(groupres.(targetfield)(:))),...
+        'nans in targetfield not supported in assumeregister mode');
+else
+    % have to be careful not to average over different rois
+    for s = 1:nsub
+        for r = 1:length(subres(s).cols_roi)
+            thisroi = subres(s).cols_roi{r};
+            indroi = strcmp(groupres.cols_roi,thisroi);
+            groupres.(targetfield)(:,indroi,s) = subres(s).(targetfield)(:,r);
+            if isfield(groupres,'nfeatures')
+                groupres.nfeatures(1,indroi,s) = subres(s).nfeatures(1,r);
+            end
         end
     end
 end
@@ -92,35 +108,75 @@ meanres.pperm = NaN(size(meanres.t));
 meanres.medianboot = NaN(size(meanres.t));
 meanres.medianste = NaN(size(meanres.t));
 
+% segregate the nulldist/bootdist because these tend to blow up in size
+nulldist = struct('cols_roi',{meanres.cols_roi},'rows_contrast',...
+    {meanres.rows_contrast},targetfield,NaN([ncon nroi nperm]));
+bootdist = struct('cols_roi',{meanres.cols_roi},'rows_contrast',...
+    {meanres.rows_contrast},targetfield,NaN([ncon nroi nboot]));
+
 % for ease of indexing, data is now
 % subject by contrast by roi
 roidata = shiftdim(groupres.(targetfield),2);
 if nperm > 1 || nboot > 0
     % we only have to bother with all this fuss if we are doing
     % some kind of resampling
-    for r = 1:nroi
-        % indexing the first row works because n is the same for
-        % each contrast
-        design = ones(meanres.n(1,r),1);
-        thisroidata = roidata(:,:,r);
-        % any and all are assumed to be equivalent due to test
-        % above (nb, magically design is already the right length)
-        goodroi = ~any(isnan(thisroidata),2);
-        model = GLM(design,thisroidata(goodroi,:));
+    if assumeregister
+        % life is easy, one model and test per contrast. This is generally
+        % faster than looping over rois because we are often dealing
+        % with a searchlight volume here (many times more features than
+        % contrasts)
+        for c = 1:ncon
+            design = ones(meanres.n(c,1),1);
+            assert(numel(unique(meanres.n(c,:)))==1,...
+                'n must be the same for all ROIs to use assumeregister');
+            model = GLM(design,squeeze(roidata(:,c,:)));
 
-        % permutation test
-        if nperm > 1
-            nulldist = permutesamples(model,nperm,'fit',...
-                [1 ncon]);
-            meanres.pperm(:,r) = permpvalue(nulldist);
+            % permutation test
+            if nperm > 1
+                nulldist.(targetfield)(c,:,:) = permflipsamples(model,...
+                    nperm,'fit',[1 nroi]);
+            end
+
+            % bootstrap
+            if nboot > 0
+                bootdist.(targetfield)(c,:,:) = bootstrapsamples(model,...
+                    nboot,'fit',[1 nroi]);
+            end
+
         end
+    else
+        % have to do each ROI separately to get correct n. Instead we put
+        % all the contrasts in feature dimension for the model for some
+        % speed up compared to fully nested loop case.
+        for r = 1:nroi
+            % indexing the first row works because n is the same for
+            % each contrast
+            design = ones(meanres.n(1,r),1);
+            thisroidata = roidata(:,:,r);
+            % any and all are assumed to be equivalent due to test
+            % above (nb, magically design is already the right length)
+            goodroi = ~any(isnan(thisroidata),2);
+            model = GLM(design,thisroidata(goodroi,:));
 
-        % bootstrap
-        if nboot > 0
-            bootdist = bootstrapsamples(model,nboot,'fit',...
-                [1 ncon]);
-            [meanres.medianboot(:,r), meanres.medianste(:,r)] = ...
-                bootprctile(bootdist);
+            % permutation test
+            if nperm > 1
+                nulldist.(targetfield)(:,r,:) = permflipsamples(model,...
+                    nperm,'fit',[1 ncon]);
+            end
+
+            % bootstrap
+            if nboot > 0
+                bootdist.(targetfield)(:,r,:) = bootstrapsamples(model,...
+                    nboot,'fit',[1 ncon]);
+            end
         end
     end
+end
+
+if nperm > 1
+    meanres.pperm = permpvalue(nulldist.(targetfield));
+end
+if nboot > 0
+    [meanres.medianboot,meanres.medianste] = bootprctile(...
+        bootdist.(targetfield));
 end
