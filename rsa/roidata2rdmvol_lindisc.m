@@ -31,7 +31,7 @@ function disvol = roidata2rdmvol_lindisc(rois,designvol,epivol,varargin)
 ts = varargs2structfields(varargin,struct(...
     'split',[],...
     'glmclass','GLM','glmvarargs',{},'sterrunits',false,'crossvalidate',...
-    false,'minvoxeln',0,'batchsize',5000));
+    false,'minvoxeln',1,'batchsize',5000));
 
 if ~iscell(ts.split)
     % so we can easily deal to cvgroup field later
@@ -127,6 +127,12 @@ for batch = 1:nbatch
                 ts.glmclass,ts.glmvarargs{:});
             % just self-fit
             w = discriminant(thismodel,conmat);
+            % crash on nearly singular problems - these indicate
+            % serious problems (often very inhomogeneous epi intensities
+            % across searchlight voxels)
+            [msg,warntype] = lastwarn;
+            assert(~strcmp(warntype,'MATLAB:nearlySingularMatrix'),...
+                'nearly singular at roi %d',b);
             dissimilarities(:,b) = feval(testmeth,thismodel,...
                 w,conmat);
         end
