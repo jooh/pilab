@@ -513,11 +513,13 @@ classdef GLM < matlab.mixin.Copyable
             assert(numel(outshape)<3,...
                 'bootmeth must return at most 2d outputs, got %s',...
                 mat2str(outshape));
+            % NB, you will get nans at the end of bootest if you ask for
+            % more boots than is possible. prctile handles this well.
+            bootest = preallocate(self,[outshape nboot]);
             bootinds = self.preparesampleboots(nboot);
             % update bootinds in case you asked for more than what's
             % possible
             nboot = size(bootinds,1);
-            bootest = preallocate(self,[outshape nboot]);
             parfor b = 1:nboot
                 bootd = drawbootsample(self,bootinds(b,:));
                 bootest(:,:,b) = bootd.(bootmeth);
