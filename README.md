@@ -59,7 +59,7 @@ which enables a standardised solution for random effects group analysis
 # about pattern information analysis and this repository
 pilab is being developed by [Johan
 Carlin](mailto:johan.carlin@mrc-cbu.cam.ac.uk) at the [MRC Cognition and
-Brain Sciences Unit](www.mrc-cbu.cam.ac.uk) (CBU), Cambridge, UK. Any
+Brain Sciences Unit](http://www.mrc-cbu.cam.ac.uk) (CBU), Cambridge, UK. Any
 comments and queries are welcome. 
 
 This code is an implementation of analysis methods originally proposed by
