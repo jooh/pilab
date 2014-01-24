@@ -23,6 +23,8 @@ analysis) are implemented as special (sub) cases of the general linear
 model. Convenient class methods enable bootstrapping and permutation
 testing.
 
+![Class hierarchy](classhierarchy.png "GLM class hierarchy")
+
 ## containers
 Data and metadata are stored together in BaseVolume and MriVolume instances.
 The basic representation of data is 2D (samples by features), and metadata
