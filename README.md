@@ -64,10 +64,10 @@ comments and queries are welcome.
 
 This code is an implementation of analysis methods originally proposed by
 [Niko
-Kriegeskorte](http://www.mrc-cbu.cam.ac.uk/people/nikolaus.kriegeskorte) in
-collaboration with members of the CBU Visual Objects lab. The reference
-section below lists relevant academic publications, which should be cited
-in any publications resulting from the use of this code.
+Kriegeskorte](http://www.mrc-cbu.cam.ac.uk/people/nikolaus.kriegeskorte)
+and collaborators. The reference section below lists relevant academic
+publications, which should be cited in any publications resulting from the
+use of this code.
 
 Note that pilab is pre-alpha code undergoing active development. Absolutely
 no guarantees are provided concerning the accuracy of results at this
