@@ -110,8 +110,8 @@ for batch = 1:nbatch
             if ~isempty(ts.split)
                 [thismodel.cvgroup] = ts.split{:};
             end
-            cvres = cvclassificationrun(thismodel,'discriminant',testmeth,...
-                [],conmat);
+            cvres = cvclassificationrun(thismodel,'discriminant',...
+                testmeth,[],conmat);
             % result - mean across splits
             dissimilarities(:,b) = mean(cvres,3);
         end
