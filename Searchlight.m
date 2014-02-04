@@ -11,7 +11,7 @@ classdef Searchlight < handle
         radius = []; % searchlight radius (mm)
         nwantedvox % searchlight size (voxels)
         lastspheren % store the last n necessary to achieve masked nvox
-        mapcoords % handle to either findbyr or findbyn methods
+        mapcoords % handle to either mapr or mapn methods
         nvox = []; % number of voxels in actual searchlight (after mask)
         vol % MriVolume instance for mask
         distances % mm distances for spheres with <min(vol.header.dim) radius
@@ -69,6 +69,12 @@ classdef Searchlight < handle
             % mapping, index the sl.xyz where sl.distances <= r
             [sl.distances,inds] = sort(sl.distances);
             sl.xyz = sl.xyz(:,inds);
+            % insert central voxel
+            % nb, because searchlight maps often end up being sparse we
+            % insert a very small value rather than 0 to avoid problems
+            % later.
+            sl.distances = [realmin('single'); sl.distances];
+            sl.xyz = [[0 0 0]' sl.xyz];
             % this approach only supports searchlights up to a certain
             % (ludicrous) size
             sl.rmax = max(sl.distances);
