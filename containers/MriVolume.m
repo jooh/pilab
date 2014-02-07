@@ -217,6 +217,11 @@ classdef MriVolume < BaseVolume
                     vol.meta.samples.names = [vol.meta.samples.names; volnames];
                 end
             end
+            % insure that volume header is appropriate for data precision
+            if isfield(vol.header,'dt')
+                vol.header = [matlabclass2spmnifti(vol.data),...
+                    spm_platform('bigend')];
+            end
             vol.nsamples = size(vol.data,1);
             % analyse the standard descriptives
             vol.checkmeta;
@@ -256,16 +261,7 @@ classdef MriVolume < BaseVolume
         % export a 1 by n data vector to an spm_write_vol-compatible file
         % format (typically nii,hdr/img).
         % data2file(datavec,outpath)
-            outV = self.header;
-            outV.fname = outpath;
-            % now write out in appropriate numeric class (avoid quantizing)
-            if isnumeric(datavec)
-                outV.dt = [spm_type('float64') spm_platform('bigend')];
-            else
-                outV.dt = [spm_type('int32') spm_platform('bigend')];
-            end
-            mat = self.data2mat(datavec);
-            spm_write_vol(outV,mat);
+            datavec2nifti(datavec,self.mask,outpath,self.header);
         end
 
         function featind = linind2featind(self,linind)

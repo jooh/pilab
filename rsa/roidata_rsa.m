@@ -50,8 +50,6 @@ nulldist = struct('cols_roi',cols_roi,'rows_contrast',rows_contrast,...
 bootdist = struct('cols_roi',cols_roi,'rows_contrast',rows_contrast,...
     'r',NaN([npredictor disvol.nfeatures nboot]));
 
-% is this stored somewhere in disvol? Suspect it is.
-% res.nfeatures(r) = model.nfeatures;
 for c = 1:npredictor
     if issplitdatardm(predictors(c).RDM)
         % split class instance
