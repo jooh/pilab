@@ -219,7 +219,7 @@ classdef MriVolume < BaseVolume
             end
             % insure that volume header is appropriate for data precision
             if isfield(vol.header,'dt')
-                vol.header = [matlabclass2spmnifti(vol.data),...
+                vol.header.dt = [matlabclass2spmnifti(vol.data),...
                     spm_platform('bigend')];
             end
             vol.nsamples = size(vol.data,1);
