@@ -18,6 +18,8 @@ elseif ischar(split)
     split = eval(split);
 end
 usplit = unique(split);
+% support skipping some chunks completely
+usplit(isnan(usplit)) = [];
 nsplit = length(usplit);
 
 % process each volume input
