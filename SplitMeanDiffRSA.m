@@ -1,3 +1,6 @@
+% split RDM variant of MeanDiffRSA
+%
+% gl = SplitMeanDiffRSA(modelrdms,datardms)
 classdef SplitMeanDiffRSA < MeanDiffRSA & SplitRSA
     methods
         function gl = SplitMeanDiffRSA(modelrdms,datardms)
