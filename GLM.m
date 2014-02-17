@@ -569,10 +569,10 @@ classdef GLM < matlab.mixin.Copyable
         % return the mahalonobis distance between the points in conmat
         % computed on the infomodel(self,w).
             model = infomodel(self,w);
-            % the approach taken here is to take the square root of each
-            % contrast estimate. If you estimated w on the same data this
-            % is equivalent to the mahalanobis distance.
-            mahdist = sqrt(diag(contrast(model,conmat)))';
+            % we leave out the sqrt transform because negative statistics
+            % produce imaginary numbers if you are using a mahalanobis
+            % classifier (ie weights from independent data). 
+            mahdist = diag(contrast(model,conmat))';
         end
 
         function d = preallocate(self,shape)
