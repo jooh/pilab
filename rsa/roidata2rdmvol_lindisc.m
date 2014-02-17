@@ -112,6 +112,9 @@ for batch = 1:nbatch
             end
             cvres = cvclassificationrun(thismodel,'discriminant',...
                 testmeth,[],conmat);
+            [msg,warntype] = lastwarn;
+            assert(~strcmp(warntype,'MATLAB:nearlySingularMatrix'),...
+                'nearly singular at roi %d',b);
             % result - mean across splits
             dissimilarities(:,b) = mean(cvres,3);
         end
