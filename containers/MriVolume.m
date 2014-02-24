@@ -112,8 +112,8 @@ classdef MriVolume < BaseVolume
                         assert(spm_check_orientations(...
                             [vol.header; dV(:)]),'header mismatch');
                     else
-                        % set header by data instead of mask
-                        vol.header = dV;
+                        % set header by first data volume instead of mask
+                        vol.header = dV(1);
                         vol.voxsize = vox2mm(vol.header);
                     end
                     % initialise an all-on mask based on data size
