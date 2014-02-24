@@ -5,7 +5,7 @@
 function datavec2nifti(data,mask,outpath,V)
 
 if isa(data,'logical')
-    false(V.dim);
+    datamat = false(V.dim);
 else
     datamat = zeros(V.dim,class(data));
 end
