@@ -40,7 +40,7 @@ classdef BaseVolume < handle
                     % update meta
                     vol.appendmetasamples(thisdata.meta.samples);
                     % don't concatenate features - test if matched.
-                    vol.appendmetafeatures(thisdata.meta.features);
+                    vol.checkmetafeatures(thisdata.meta.features);
                     if isempty(vol.frameperiod)
                         vol.frameperiod = thisdata.frameperiod;
                     else
@@ -83,6 +83,7 @@ classdef BaseVolume < handle
         function self = initialisemeta(self,varargin)
         % handle the basic parsing of named meta arguments. Used in
         % initialisation method of sub-classes.
+        %
         % self = initialisemeta(self,varargin)
             standardvalues = structfun(@(x)x,self.standardstruct,...
                 'uniformoutput',false);
@@ -113,19 +114,25 @@ classdef BaseVolume < handle
         end
 
         function sgdetrend(self,k,f)
-            % use a Savitzky-Golay filter to detrend the data across time.
-            % Operates separately on each chunk
+        % use a Savitzky-Golay filter to detrend the data across samples.
+        % Operates separately on each chunk
+        %
+        % sgdetrend(k,f)
             filterbychunk(self,@(data,k,f)data-sgolayfilt(data,k,f,[],...
                 1),k,f);
         end
 
         function sgfilter(self,k,f)
+        % Apply a Savitzky-Golay filter to the data across samples
+        %
+        % sgfilter(k,f)
             filterbychunk(self,'sgolayfilt',k,f,[],1);
         end
 
         function checkmeta(self)
         % add desc data for each meta field, check that meta data is in
         % register.
+        %
         % checkmeta(self)
             for fn = fieldnames(self.standardstruct)'
                 fnstr = fn{1};
@@ -159,6 +166,8 @@ classdef BaseVolume < handle
         % return logical indices into samples and features according to
         % some meta data. Mainly used internally to support selectbymeta
         % and removebymeta.
+        %
+        % [sampind,featind] = findbymeta(self,varargin)
             % get possible names
             validsamp = fieldnames(self.meta.samples);
             validfeat = fieldnames(self.meta.features);
@@ -264,9 +273,10 @@ classdef BaseVolume < handle
         end
 
         function out = end(A,k,n)
-            % override 'end' operator to get end in self.data rather than
-            % self when doing e.g. v2 = vol(end,:);
-            % out = end(A,k,n)
+        % override 'end' operator to get end in self.data rather than
+        % self when doing e.g. v2 = vol(end,:);
+        %
+        % out = end(A,k,n)
             out = feval('end',A.data,k,n);
         end
 
@@ -274,6 +284,7 @@ classdef BaseVolume < handle
         % basic subsref behaviour. Should be called in subclass subsref.
         % It's a bit baffling, but Matlab will not tolerate having these
         % subsref methods in the Static,Private field below...
+        %
         % [dat,meta] = basesubsref(a,s)
             assert(length(s)==1,...
                 'cannot subindex instance');
@@ -297,13 +308,37 @@ classdef BaseVolume < handle
                     s.subs{2});
             end
         end
-        % for mysterious reasons operator overloading only works for
-        % dynamic methods it seems
+
         function o = horzcat(varargin)
-            error('concatenation in feature dimension is not supported')
+        % o = horzcat(varargin)
+            o = [];
+            if ~nargin
+                return
+            end
+            ref = varargin{1};
+            % assume same samples in each volume
+            samples = ref.meta.samples;
+            features = ref.meta.features;
+            data = ref.data;
+            frameperiod = ref.frameperiod;
+            for n = 2:nargin
+                % use parsemeta to check that samples are identical in the
+                % to-be-concatenated data
+                samples2 = ref.parsemeta(samples,...
+                    varargin{n}.meta.samples,@ref.testmeta);
+                assert(isequal(frameperiod,varargin{n}.frameperiod),...
+                    'mismatched frameperiods');
+                data = [data varargin{n}.data];
+                features = ref.parsemeta(features,...
+                    varargin{n}.meta.features,@horzcat);
+            end
+            o = feval(class(ref),data,'metasamples',samples,...
+                'metafeatures',features,'frameperiod',...
+                ref.frameperiod);
         end
 
         function o = vertcat(varargin)
+        % o = vertcat(varargin)
             % construct a volume where the mask is read from the first
             % entry and all instances are passed as is. Should concatenate
             % nicely
@@ -313,36 +348,42 @@ classdef BaseVolume < handle
         end
 
         function o = cat(dim,varargin)
-            % Identical to horzcat - effectively this is a 1D class
-            assert(dim==1,'concatenation is only supported in data dim')
-            o = vertcat(varargin{:});
+        % o = cat(dim,varargin)
+            switch dim
+                case 1
+                    o = vertcat(varargin{:});
+                case 2
+                    o = horzcat(varargin{:});
+                otherwise
+                    error('cannot concatenate in dim %d',dim);
+            end
         end
 
-        function appendmetafeatures(self,new)
+        function checkmetafeatures(self,new)
         % Update each entry in meta.features recursively. Test for
         % mismatched meta features.
-        % appendmetafeatures(new)
+        % checkmetafeatures(new)
             self.meta.features = self.parsemeta(self.meta.features,new,...
-                @self.testfeatures);
+                @self.testmeta);
         end
 
         function appendmetasamples(self,new)
         % Update each entry in meta.samples recursively by concatenation.
         % appendmetasamples(new)
-            metaoperate = @(x,y) cat(1,x,y);
             self.meta.samples = self.parsemeta(self.meta.samples,new,...
-                metaoperate);
-        end
-
-        function org = testfeatures(self,org,new)
-        % test function to support appendmetafeatures.
-        % org = testfeatures(org,new)
-            assert(isequal(org,new),'mismatched features!')
+                @vertcat);
         end
     end
 
     methods(Static = true)
+        function org = testmeta(org,new)
+        % test function to support checkmetafeatures.
+        % org = testmeta(org,new)
+            assert(isequal(org,new),'mismatched features!')
+        end
+
         function inds = findbyvalue(array,item)
+
             if ischar(item) || (iscell(item) && ischar(item{1}))
                 assert(iscell(array) && isa(array{1},'char'),...
                     'array must be cell with char entries');
@@ -387,7 +428,7 @@ classdef BaseVolume < handle
         function org = parsemeta(org,new,metaoperate)
         % internal method for iterating recursively over data in nested
         % struct arrays. metaoperate is a function handle that gets applied
-        % to data. Used to support appendmetafeatures and
+        % to data. Used to support checkmetafeatures and
         % appendmetasamples.
         % org = parsemeta(org,new,metaoperate)
             orgfields = fieldnames(org);

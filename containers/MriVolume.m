@@ -134,7 +134,7 @@ classdef MriVolume < BaseVolume
                     datamat = thisdata.data;
                     % update meta
                     vol.appendmetasamples(thisdata.meta.samples);
-                    vol.appendmetafeatures(thisdata.meta.features);
+                    vol.checkmetafeatures(thisdata.meta.features);
                     % also bring along the mask if possible and needed
                     if isempty(vol.mask) && ~isempty(thisdata.mask)
                         vol.mask = thisdata.mask;
@@ -344,5 +344,12 @@ classdef MriVolume < BaseVolume
                     end
             end
         end
+
+        function o = horzcat(varargin)
+        % o = horzcat(varargin)
+            error(['concatenation in feature dimension is not ' ...
+                'supported for MriVolume']);
+        end
+
     end
 end
