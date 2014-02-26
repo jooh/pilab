@@ -143,26 +143,29 @@ for batch = 1:nbatch
     fprintf('finished in %s\n',seconds2str(toc));
 end
 
+% meta features for the disvol = meta samples from ROI vol
+metafeatures = rois.meta.samples;
+metafeatures.nfeatures = sum(rois.data~=0,2)';
 % convert to volume - here it is a problem that the result may have
 % different nfeatures than the mask (e.g. for ROI analysis or when we do
 % not run all possible searchlight spheres)
 if rois.nsamples == rois.nfeatures
     % simple case - assume that samples and features are in register
-    disvol = MriVolume(dissimilarities,rois,'metafeatures',struct(...
-        'names',{rois.meta.samples.names}));
+    disvol = MriVolume(dissimilarities,rois,'metafeatures',...
+        metafeatures);
 else
     % complicated case - need to forget the mask and write out a mask-less
     % volume. But save coordinates of ROIs to enable sanity checks later
-    coords = cell(1,rois.nsamples);
-    nvox = NaN([1 rois.nsamples]);
+    [metafeatures.com_x,metafeatures.com_y,metafeatures.com_z] = deal(...
+        NaN([1 rois.nsamples]));
     for c = 1:rois.nsamples
         % compute centre of mass for this ROI
-        coords{c} = round(mean(rois.linind2coord(rois.linind(...
+        coords = round(mean(rois.linind2coord(rois.linind(...
             rois.data(c,:)~=0)),2));
-        nvox(c) = sum(rois.data(c,:)~=0);
+        metafeatures.com_x(c) = coords(1);
+        metafeatures.com_y(c) = coords(2);
+        metafeatures.com_z(c) = coords(3);
     end
     % make a mask-less volume 
-    disvol = MriVolume(dissimilarities,[],'metafeatures',struct(...
-        'names',{rois.meta.samples.names'},'centreofmass',{coords},...
-        'nfeatures',nvox),'header',rois.header);
+    disvol = BaseVolume(dissimilarities,'metafeatures',metafeatures);
 end
