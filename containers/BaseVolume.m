@@ -97,6 +97,12 @@ classdef BaseVolume < handle
             self.meta.samples = catstruct(self.standardstruct,metasamples);
             self.meta.features = catstruct(self.standardstruct,...
                 metafeatures);
+            % insure that meta samples are in rows and meta features in
+            % columns
+            self.meta.samples = self.imposestructfieldshape(...
+                self.meta.samples,'column');
+            self.meta.features = self.imposestructfieldshape(...
+                self.meta.features,'row');
         end
 
         function filterbychunk(self,fname,varargin)
@@ -424,6 +430,26 @@ classdef BaseVolume < handle
             % recombine for the final struct
             out = catstruct(validdata, emptydata);
         end
+
+        function in = imposestructfieldshape(in,direction)
+            switch direction
+                case 'column'
+                    flattener = @(x)x(:);
+                case 'row'
+                    flattener = @(x)x(:)';
+                otherwise
+                    error('unknown direction: %s',direction);
+            end
+            for fn = fieldnames(in)'
+                fnstr = fn{1};
+                assert(ndims(in.(fnstr))<3,...
+                    'input %s is >2d',fnstr);
+                assert(~ismat(in.(fnstr)),...
+                    'input must be row or column vector');
+                in.(fnstr) = flattener(in.(fnstr));
+            end
+        end
+
 
         function org = parsemeta(org,new,metaoperate)
         % internal method for iterating recursively over data in nested
