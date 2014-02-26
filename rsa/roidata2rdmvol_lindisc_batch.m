@@ -75,8 +75,19 @@ for sp = 1:nsplit
         mfeatures.(fn) = ...
             splitdisvolcell{sp}.meta.features.nfeatures;
     end
+    if isfield(splitdisvolcell{sp}.meta.features,'centreofmass')
+        fn = sprintf('centreofmass_split%02d',sp);
+        mfeatures.(fn) = ...
+            splitdisvolcell{sp}.meta.features.centreofmass;
+    end
 end
 
+
 % make average RDM across sessions 
-disvol = MriVolume(sumdata/nsplit,splitdisvolcell{1},...
-    'metafeatures',mfeatures);
+if isa(splitdisvolcell,'MriVolume')
+    disvol = MriVolume(sumdata/nsplit,splitdisvolcell{1},...
+        'metafeatures',mfeatures);
+else
+    disvol = BaseVolume(sumdata/nsplit,...
+        'metafeatures',mfeatures);
+end
