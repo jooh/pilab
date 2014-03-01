@@ -345,7 +345,7 @@ classdef GLM < matlab.mixin.Copyable
                 cvres(:,:,s) = test.(testmeth)(prediction);
             end
         end
-            
+
         function [estimates,sterrs,bootest] = bootstraprunfit(self,nboot)
         % draw nboot samples with replacement from the available runs in
         % self. Return the median and standard error of the model fit. Uses
@@ -362,12 +362,10 @@ classdef GLM < matlab.mixin.Copyable
             [estimates,sterrs] = bootprctile(bootest);
         end
 
-        function bootest = bootstrapruns(self,nboot,bootmeth,outshape)
+        function varargout = bootstrapruns(self,nboot,bootmeth,outshape,varargin)
         % general method for computing bootstrap estimates for some
-        % bootmeth (char - must refer to a method of the current instance
-        % which takes no input arguments and returns at least one output).
-        % outshape defines the dimensionality of the bootest
-        % matrix ([row column]).
+        % bootmeth. Additional varargins get passed on to the bootmeth to
+        % enable bootstrapping of e.g. particular contrasts.
         %
         % we draw nboot samples with replacement from the available runs in
         % self.
@@ -376,22 +374,26 @@ classdef GLM < matlab.mixin.Copyable
         % out what the desired shape is. This convenience comes at a
         % performance cost.
         %
-        % bootest = bootstrapruns(self,nboot,bootmeth,[outshape])
-            if ieNotDefined('outshape')
-                % this is a little ugly but we can simply run bootmeth once
-                % to see what the output looks like
-                outshape = size(self.(bootmeth));
-            end
-            assert(numel(outshape)<3,...
-                'bootmeth must return at most 2d outputs, got %s',...
-                mat2str(outshape));
+        % You can optionally specify multiple bootmeth in cell array form
+        % to get yoked bootstrap estimates for multiple methods.
+        %
+        % varargout = bootstrapruns(self,nboot,bootmeth,[outshape],[varargin])
             bootinds = bootindices(numel(self),nboot);
             % update bootinds in case you asked for more than what's
             % possible
             nboot = size(bootinds,1);
-            bootest = preallocate(self,[outshape nboot]);
-            parfor b = 1:nboot
-                bootest(:,:,b) = self(bootinds(b,:)).(bootmeth);
+            if ieNotDefined('outshape')
+                outshape = {};
+            end
+            [varargout,bootmeth] = preallocateperms(self,nboot,bootmeth,outshape,varargin{:});
+            for m = 1:length(varargout)
+                % redundant assignment to keep parfor happy
+                temp = varargout{m};
+                parfor b = 1:nboot
+                    temp(:,:,b) = feval(bootmeth{m},self(bootinds(b,:)),...
+                        varargin{:});
+                end
+                varargout{m} = temp;
             end
         end
 
@@ -424,54 +426,67 @@ classdef GLM < matlab.mixin.Copyable
         end
 
         function inds = preparesampleperms(self,nperms)
+        % inds = preparesampleperms(self,nperms)
             inds = permuteindices(self(1).nrandsamp,nperms);
         end
 
         function inds = preparesamplepermflips(self,nperms)
+        % inds = preparesamplepermflips(self,nperms)
             inds = permflipindices(self(1).nrandsamp,nperms);
         end
 
-        function nulldist = permutesamples(self,nperms,permmeth,outshape)
+        function varargout = permutesamples(self,nperms,permmeth,outshape,varargin)
         % generate a null distribution of some permmeth (e.g., fit) by
         % resampling the order of the samples in X without replacement.
-        % Note that the same random resample is applied to the X in each
-        % run. If outshape is undefined we infer it. The returned nulldist
+        % Additional varargins are passed on to the permmeth.
+        %
+        % If outshape is undefined we infer it. The returned nulldist
         % is outshape by nperms.
         %
-        % nulldist = permutesamples(self,nperms,permmeth,outshape)
+        % You can optionally enter a cell array of permmeth, and receive
+        % the same number of output null distributions.
+        %
+        % varargout = permutesamples(self,nperms,permmeth,outshape,[varargin])
             if ieNotDefined('outshape')
-                outshape = size(self.(permmeth));
+                outshape = {};
             end
-            assert(numel(outshape)<3,...
-                'permmeth must return at most 2d outputs, got %s',...
-                mat2str(outshape));
-            nulldist = preallocate(self,[outshape nperms]);
+            [varargout,permmeth] = preallocateperms(self,nperms,...
+                permmeth,outshape,varargin{:});
             perminds = preparesampleperms(self,nperms);
             for p = 1:size(perminds,1);
                 permd = drawpermsample(self,perminds(p,:));
-                nulldist(:,:,p) = permd.(permmeth);
+                for m = 1:length(varargout)
+                    varargout{m}(:,:,p) = feval(permmeth{m},permd,...
+                        varargin{:});
+                end
             end
         end
 
-        function nulldist = permflipsamples(self,nperms,permmeth,outshape)
+        function varargout = permflipsamples(self,nperms,permmeth,outshape,varargin)
         % generate a null distribution of some permmeth (e.g., fit) by
-        % flipping the sign order of the samples in the data.
+        % flipping the sign order of the samples in the data. Additional
+        % varargin get passed to permmeth as input arguments.
+        %
         % Note that the same random resample is applied to the data in each
         % run. If outshape is undefined we infer it. The returned nulldist
-        % is outshape by nperms.
+        % is outshape by nperms. 
         %
-        % nulldist = permflipsamples(self,nperms,permmeth,outshape)
+        % You can optionally enter a cell array of permmeth, and receive
+        % the same number of output null distributions.
+        %
+        % varargout = permflipsamples(self,nperms,permmeth,outshape,[permmethargs])
             if ieNotDefined('outshape')
-                outshape = size(self.(permmeth));
+                outshape = {};
             end
-            assert(numel(outshape)<3,...
-                'permmeth must return at most 2d outputs, got %s',...
-                mat2str(outshape));
-            nulldist = preallocate(self,[outshape nperms]);
+            [varargout,permmeth] = preallocateperms(self,nperms,...
+                permmeth,outshape,varargin{:});
             perminds = preparesamplepermflips(self,nperms);
             for p = 1:size(perminds,1);
                 permd = drawpermflipsample(self,perminds(p,:));
-                nulldist(:,:,p) = permd.(permmeth);
+                for m = 1:length(varargout)
+                    varargout{m}(:,:,p) = feval(permmeth{m},permd,...
+                        varargin{:});
+                end
             end
         end
 
@@ -480,7 +495,7 @@ classdef GLM < matlab.mixin.Copyable
         % function).
         %
         % inds = preparesampleboots(self,nboot)
-            inds = bootindices(self.nrandsamp,nboot);
+            inds = bootindices(self(1).nrandsamp,nboot);
         end
 
         function model = drawbootsample(self,inds)
@@ -498,31 +513,35 @@ classdef GLM < matlab.mixin.Copyable
             end
         end
 
-        function bootest = bootstrapsamples(self,nboot,bootmeth,outshape)
+        function varargout = bootstrapsamples(self,nboot,bootmeth,outshape,varargin)
         % bootstrap the estimate for some bootmeth (e.g. fit) by drawing
         % samples from the rows of X and data in concert. Note that the
         % same random draw is made to each run. If outshape is undefined we
         % infer it. The returned bootest is outshape by nboot.
         %
-        % bootest = bootstrapsamples(self,nboot,bootmeth,outshape)
+        % You can optionally specify multiple bootmeth in cell array form
+        % to get yoked bootstrap estimates for multiple methods.
+        %
+        % varargout = bootstrapsamples(self,nboot,bootmeth,outshape)
             if ieNotDefined('outshape')
-                % this is a little ugly but we can simply run bootmeth once
-                % to see what the output looks like
-                outshape = size(self.(bootmeth));
+                outshape = {};
             end
-            assert(numel(outshape)<3,...
-                'bootmeth must return at most 2d outputs, got %s',...
-                mat2str(outshape));
-            % NB, you will get nans at the end of bootest if you ask for
-            % more boots than is possible. prctile handles this well.
-            bootest = preallocate(self,[outshape nboot]);
             bootinds = self.preparesampleboots(nboot);
             % update bootinds in case you asked for more than what's
             % possible
             nboot = size(bootinds,1);
-            parfor b = 1:nboot
-                bootd = drawbootsample(self,bootinds(b,:));
-                bootest(:,:,b) = bootd.(bootmeth);
+            % NB, you will get nans at the end of bootest if you ask for
+            % more boots than is possible. prctile handles this well.
+            [varargout,bootmeth] = preallocateperms(self,nboot,bootmeth,...
+                outshape,varargin{:});
+            for m = 1:length(varargout)
+                % redundant assignment to keep parfor happy
+                temp = varargout{m};
+                parfor b = 1:nboot
+                    bootd = drawbootsample(self,bootinds(b,:));
+                    temp(:,:,b) = feval(bootmeth{m},bootd,varargin{:});
+                end
+                varargout{m} = temp;
             end
         end
 
@@ -588,6 +607,27 @@ classdef GLM < matlab.mixin.Copyable
             else
                 d = NaN(shape,class(self(1).data));
             end
+        end
+
+        function [d,permmeth] = preallocateperms(self,nperms,permmeth,outshape,varargin)
+        % d = preallocateperms(self,nperms,permmeth,outshape,[varargin])
+            if ~iscell(permmeth)
+                permmeth = {permmeth};
+            end
+            if ~iscell(outshape)
+                outshape = {outshape};
+            end
+            nmeth = numel(permmeth);
+            if isempty(outshape)
+                for m = 1:nmeth
+                    outshape{m} = size(feval(permmeth{m},self,varargin{:}));
+                    assert(numel(outshape{m})<3,...
+                        'permmeth must return 2d outputs, got %s',...
+                        mat2str(outshape{m}));
+                end
+            end
+            d = arrayfun(@(m)preallocate(self,...
+                [outshape{m} nperms]),1:nmeth,'uniformoutput',false);
         end
     end
 end
