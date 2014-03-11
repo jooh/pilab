@@ -21,7 +21,6 @@
 % 
 % The gist of these options are:
 % ~split && ~sterrunits = mahalanobis distance
-% ~split && sterrunits = 'whitened euclidean' (?)
 % split && ~sterrunits = mahalanobis classifier distance
 % split && sterrunits = LDAt RDM
 %
@@ -30,8 +29,10 @@ function disvol = roidata2rdmvol_lindisc(rois,designvol,epivol,varargin)
 
 ts = varargs2structfields(varargin,struct(...
     'split',[],...
-    'glmclass','GLM','glmvarargs',{},'sterrunits',false,'crossvalidate',...
+    'glmclass','GLM','glmvarargs',{{}},'sterrunits',false,...
+    'crossvalidate',...
     false,'minvoxeln',1,'batchsize',5000));
+
 
 if ~iscell(ts.split)
     % so we can easily deal to cvgroup field later
