@@ -37,7 +37,7 @@ function [disvol,splitdisvolcell] = roidata2rdmvol_lindisc_batch(rois,designvol,
 
 getArgs(varargin,{'split',[],'glmvarargs',{{}},'cvsplit',[],...
     'glmclass','GLM','sterrunits',1,'crossvalidate',1,...
-    'minvoxeln',1,'batchsize',10000,'searchvol',false,'crossinds',[]});
+    'minvoxeln',1,'batchsize',10000,'searchvol',false,'crosscon',[]});
 
 if ~iscell(glmvarargs)
     if isempty(glmvarargs)
@@ -51,8 +51,8 @@ if ischar(cvsplit)
     cvsplit = eval(cvsplit);
 end
 
-if ischar(crossinds)
-    crossinds = eval(crossinds);
+if ischar(crosscon)
+    crosscon = eval(crosscon);
 end
 
 if sterrunits
@@ -64,7 +64,7 @@ end
 % assemble processors
 glmspec = GLMConstructor('GLM',cvsplit);
 
-if isempty(crossinds)
+if isempty(crosscon)
     % straight RDM
     np = nchoosek(designvol.nfeatures,2);
     % contrast vector of correct class
@@ -80,18 +80,18 @@ if isempty(crossinds)
     end
 else
     % cross-class RDM - first set up contrast vectors
-    assert(crossvalidate,'must crossvalidate if crossinds are present');
-    nc = numel(crossinds{1});
-    assert(nc==numel(crossinds{2}),'mismatched crossinds');
+    assert(crossvalidate,'must crossvalidate if crosscon are present');
+    nc = numel(crosscon{1});
+    assert(nc==numel(crosscon{2}),'mismatched crosscon');
     assert(nc<=(designvol.nfeatures/2),...
-        'bad crossinds for designvol.nfeatures');
+        'bad crosscon for designvol.nfeatures');
     np = nchoosek(nc,2);
     cons = allpairwisecontrasts(feval(class(epivol.data),nc));
     fullmat = zeros(np,designvol.nfeatures,class(cons));
     crosscon{1} = fullmat;
-    crosscon{1}(:,crossinds{1}) = cons;
+    crosscon{1}(:,crosscon{1}) = cons;
     crosscon{2} = fullmat;
-    crosscon{2}(:,crossinds{2}) = cons;
+    crosscon{2}(:,crosscon{2}) = cons;
     % then processors
     rdmcross(1) = GLMProcessor('cvcrossclassificationrun',[],1,...
         'discriminant',testmeth,[np 1],crosscon{1},crosscon{2});
