@@ -84,7 +84,7 @@ end
 
 
 % make average RDM across sessions 
-if isa(splitdisvolcell,'MriVolume')
+if isa(splitdisvolcell{1},'MriVolume')
     disvol = MriVolume(sumdata/nsplit,splitdisvolcell{1},...
         'metafeatures',mfeatures);
 else
