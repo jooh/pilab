@@ -78,7 +78,7 @@ classdef ROIProcessor < MetaProcessor
                 roimat = batchrois.data;
                 epimat = batchepis.data;
 
-                for b = self.batchmat(1:thisbatchsize,batch)'
+                parfor b = self.batchmat(1:thisbatchsize,batch)'
                     % um, can't we just use b directly?
                     % skip empty rois (these come out as NaN)
                     validvox = full(roimat(b,:)~=0);
