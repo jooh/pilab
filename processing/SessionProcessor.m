@@ -22,11 +22,14 @@ classdef SessionProcessor < MetaProcessor
 
         function varargout = call(self,design,data,chunks)
             nreturn = self(1).processor(1).nreturn;
+            uchunk = unique(chunks);
             for split = 1:self(1).nsplit
                 % each entry in chunks defines the chunk to which a given
                 % sample belongs. so need to first obtain chunkinds
-                splitchunk = find(self(1).sessionsplit==...
+                chunkind = find(self(1).sessionsplit==...
                     self(1).usplit(split));
+                % map to actual chunk values (may not be 1:n)
+                splitchunk = uchunk(chunkind);
                 % then find the volumes that have these chunk values
                 thissplit = ismember(chunks,splitchunk);
                 assert(any(thissplit),'empty split! bad sessionsplit?');
