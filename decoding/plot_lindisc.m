@@ -14,6 +14,8 @@ concolors = hsv(ncon) * .9;
 
 % invisible figure
 fighand = figurebetter([],[30 30],1/2,false);
+% make it current fig
+figure(fighand);
 
 conclean = stripbadcharacters(res.rows_contrast,' ');
 roiclean = stripbadcharacters(res.cols_roi);
