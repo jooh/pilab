@@ -18,13 +18,18 @@ classdef MetaProcessor < Processor
 
     methods
         function mp = MetaProcessor(processor,combiner)
-            nreturn = processor(1).nreturn;
-            assert(isequal(nreturn,processor.nreturn),...
-                'processors must have same nreturn');
             if ieNotDefined('combiner')
                 combiner = [];
             end
-            mp = mp@Processor(combiner,processor(1).nreturn);
+            if isempty(processor)
+                processor = [];
+                nreturn = [];
+            else
+                nreturn = processor(1).nreturn;
+                assert(isequal(nreturn,processor.nreturn),...
+                    'processors must have same nreturn');
+            end
+            mp = mp@Processor(combiner,nreturn);
             mp.processor = processor;
         end
 

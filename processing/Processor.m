@@ -9,7 +9,7 @@
 %
 % Processor itself is a base class that cannot be used directly.
 %
-classdef Processor < matlab.mixin.Copyable
+classdef Processor < Saveable
     properties
         nreturn = 1;
         combiner = @matmean;
@@ -17,7 +17,7 @@ classdef Processor < matlab.mixin.Copyable
 
     methods
         function pr = Processor(combiner,nreturn)
-            if ~any(nargin)
+            if ~nargin
                 return
             end
             if ~ieNotDefined('nreturn')

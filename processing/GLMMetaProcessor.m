@@ -15,6 +15,10 @@ classdef GLMMetaProcessor < MetaProcessor
 
     methods
         function ga = GLMMetaProcessor(constructor,processor,combiner)
+            if ~nargin
+                processor = [];
+                constructor = [];
+            end
             if ieNotDefined('combiner')
                 combiner = [];
             end
