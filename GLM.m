@@ -5,7 +5,7 @@
 % Initialise with:
 % gl = GLM(X,data);
 %
-classdef GLM < matlab.mixin.Copyable
+classdef GLM < Saveable
     properties
         X % design matrix (nsamples by nregressors)
         data % data (nsamples by nfeatures)
