@@ -6,7 +6,7 @@
 % ga = GLMMetaProcessor(constructor,processor,[combiner])
 %
 % Call:
-% result = call(ga,design,data,chunks)
+% result = call(design,data,chunks)
 %
 classdef GLMMetaProcessor < MetaProcessor
     properties
