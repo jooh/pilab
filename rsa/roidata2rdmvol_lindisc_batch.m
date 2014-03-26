@@ -27,7 +27,6 @@
 %   calculated for each unique entry in split and the resulting
 %   session-specific RDMs are averaged.
 % sterrunits: scale by standard error (default true)
-% batchsize: number of ROIs to run in one call to parfor (default 1000)
 % searchvol: if true, the resulting disvols are MriVolume. For this,
 %   rois.nsamples must equal rois.nfeatures and epivol.nfeatures (default
 %   false)
@@ -37,69 +36,31 @@ function [disvol,splitdisvolcell] = roidata2rdmvol_lindisc_batch(rois,designvol,
 
 getArgs(varargin,{'split',[],'glmvarargs',{{}},'cvsplit',[],...
     'glmclass','GLM','sterrunits',1,'crossvalidate',1,...
-    'minvoxeln',1,'batchsize',10000,'searchvol',false,'crosscon',[]});
+    'minvoxeln',1,'searchvol',false,'crosscon',[],'minn',0});
 
-if ~iscell(glmvarargs)
-    if isempty(glmvarargs)
-        glmvarargs = {};
-    else
-        glmvarargs = {glmvarargs};
-    end
-end
+% construct the RDM analysis
+glman_rdm = rdms_lindisc_configureprocess('glmclass',glmclass,...
+    'glmvarargs',...
+    glmvarargs,'cvsplit',cvsplit,'sterrunits',sterrunits,...
+    'crossvalidate',crossvalidate,'crosscon',crosscon,'ncon',...
+    designvol.nfeatures,'setclass',class(epivol.data));
 
-if ischar(cvsplit)
-    cvsplit = eval(cvsplit);
-end
+assert(isequal(epivol.xyz,rois.xyz),...
+    'mismatched roi/epivol');
+assert(isequal(epivol.meta.samples.chunks,...
+    designvol.meta.samples.chunks),...
+    'mismatched epivol/designvol');
 
-if ischar(crosscon)
-    crosscon = eval(crosscon);
-end
-
-if sterrunits
-    testmeth = 'infotmap';
+if ~matlabpool('size')
+    runfun = 'runrois_serial';
 else
-    testmeth = 'infomahalanobis';
+    runfun = 'runrois_spmd';
 end
 
-% assemble processors
-glmspec = GLMConstructor('GLM',cvsplit);
 
-if isempty(crosscon)
-    % straight RDM
-    np = nchoosek(designvol.nfeatures,2);
-    % contrast vector of correct class
-    cons = allpairwisecontrasts(feval(class(epivol.data),...
-        designvol.nfeatures));
-    if crossvalidate
-        rdm = GLMProcessor('cvclassificationrun',[],1,'discriminant',...
-            testmeth,[np 1],cons);
-        % only necessary if CV
-        glman_rdm = GLMMetaProcessor(glmspec,rdm,@(x)mean(x,3));
-    else
-        error('currently unsupported');
-    end
-else
-    % cross-class RDM - first set up contrast vectors
-    assert(crossvalidate,'must crossvalidate if crosscon are present');
-    nc = numel(crosscon{1});
-    assert(nc==numel(crosscon{2}),'mismatched crosscon');
-    assert(nc<=(designvol.nfeatures/2),...
-        'bad crosscon for designvol.nfeatures');
-    np = nchoosek(nc,2);
-    cons = allpairwisecontrasts(feval(class(epivol.data),nc));
-    fullmat = zeros(np,designvol.nfeatures,class(cons));
-    crosscon{1} = fullmat;
-    crosscon{1}(:,crosscon{1}) = cons;
-    crosscon{2} = fullmat;
-    crosscon{2}(:,crosscon{2}) = cons;
-    % then processors
-    rdmcross(1) = GLMProcessor('cvcrossclassificationrun',[],1,...
-        'discriminant',testmeth,[np 1],crosscon{1},crosscon{2});
-    rdmcross(2) = GLMProcessor('cvcrossclassificationrun',[],1,...
-        'discriminant',testmeth,[np 1],crosscon{2},crosscon{1});
-    glman_rdm = GLMMetaProcessor(glmspec,rdmcross,@(x)mean(x,3));
+if isempty(split)
+    split = ones(epivol.desc.samples.nunique.chunks,1);
 end
-
 
 if nargout>1
     % split the data into appropriately pre-processed cell arrays
@@ -108,11 +69,12 @@ if nargout>1
     splitcell = cell(nsplit,1);
     % track NaN features - may appear in different runs if nan masking
     nanmask = false([nsplit rois.nsamples]);
-    sl = ROIProcessor(rois,glman_rdm,batchsize);
+    sl = ROIProcessor(rois,glman_rdm,minn,runfun);
     for sp = 1:nsplit
-        fprintf('running rois for split %d of %d...\n',sp,nsplit);
+        fprintf('running rois for split %d of %d... ',sp,nsplit);
         tstart = clock;
-        splitcell{sp} = call(sl,designcell{sp},epicell{sp});
+        splitcell{sp} = call(sl,designcell{sp}.data,epicell{sp}.data,...
+            epicoll{sp}.meta.samples.chunks);
         fprintf('finished in %.3fs\n',etime(clock,tstart));
         % track NaN features across splits may appear in different runs if
         % nan masking - nans should only really happen here if you enter
@@ -128,8 +90,12 @@ else
     % can just build everything into one processor. This tends to be faster
     % because it puts more processing inside each parfor job.
     glman_rdm_split = SessionProcessor(split,glman_rdm);
-    sl = ROIProcessor(rois,glman_rdm_split,batchsize);
-    meanresult = sl.call(designvol,epivol);
+    sl = ROIProcessor(rois,glman_rdm_split,minn,runfun);
+    fprintf('running all rois... ')
+    tstart = clock;
+    meanresult = call(sl,designvol.data,epivol.data,...
+        epivol.meta.samples.chunks);
+    fprintf('finished in %.3fs\n',etime(clock,tstart));
 end
 
 % create output volume(s)
