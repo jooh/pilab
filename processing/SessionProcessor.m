@@ -8,10 +8,16 @@ classdef SessionProcessor < MetaProcessor
 
     methods
         function sp = SessionProcessor(sessionsplit,processor,combiner)
+            if ieNotDefined('processor')
+                processor = [];
+            end
             if ieNotDefined('combiner')
                 combiner = [];
             end
             sp = sp@MetaProcessor(processor,combiner);
+            if ~nargin
+                return
+            end
             % each entry in sessionsplit defines how to split 1 run. The
             % number indicate with which other runs it should be combined.
             sp.sessionsplit = sessionsplit;
