@@ -5,7 +5,7 @@
 % Initialise with:
 % gl = GLM(X,data);
 %
-classdef GLM < matlab.mixin.Copyable
+classdef GLM < Saveable
     properties
         X % design matrix (nsamples by nregressors)
         data % data (nsamples by nfeatures)
@@ -273,8 +273,14 @@ classdef GLM < matlab.mixin.Copyable
             if ieNotDefined('trainargs')
                 trainargs = {};
             end
+            if ~iscell(trainargs)
+                trainargs = {trainargs};
+            end
             if ieNotDefined('testargs')
                 testargs = {};
+            end
+            if ~iscell(testargs)
+                testargs = {testargs};
             end
             if ieNotDefined('outshape')
                 % do a self train/test to infer size of output
@@ -286,8 +292,6 @@ classdef GLM < matlab.mixin.Copyable
                 'testmeth must return at most 2d outputs, got %s',...
                 mat2str(outshape));
             splits = preparerunsplits(self);
-            % TODO - if train/test are different we effectively have
-            % 2*nsplit combinations to run
             nsplit = size(splits,1);
             assert(nsplit > 1,'can only crossvalidate if >1 run');
             cvres = preallocate(self,[outshape nsplit]);

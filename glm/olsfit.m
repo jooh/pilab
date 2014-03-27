@@ -7,9 +7,9 @@
 % betas = olsfit(X,Y)
 function betas = olsfit(X,Y)
 
-global olsfit_cache_X
-global olsfit_cache_Y
-global olsfit_cache_betas
+persistent olsfit_cache_X
+persistent olsfit_cache_Y
+persistent olsfit_cache_betas
 
 if isequal(olsfit_cache_X,X) && isequal(olsfit_cache_Y,Y)
     betas = olsfit_cache_betas;
