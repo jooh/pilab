@@ -58,9 +58,12 @@ switch selectmode
         inds = [];
         % keep adding searchlights until we reach the desired total ROI
         % size (err on the size of over-shooting)
+        % assign and convert here to speed up the while loop (also avoids
+        % custom subsref overhead in MriVolume)
+        roidat = full(rois.data~=0);
         while sum(inds)<n
             nspheres = nspheres + 1;
-            inds = indfun(full(rois.data(resind(1:nspheres),:))~=0,1);
+            inds = indfun(roidat(resind(1:nspheres),:),1);
             thresh = resv(nspheres);
         end
     otherwise
