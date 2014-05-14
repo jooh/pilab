@@ -383,13 +383,13 @@ classdef GLM < Saveable
         %
         % varargout = bootstrapruns(self,nboot,bootmeth,[outshape],[varargin])
             bootinds = bootindices(numel(self),nboot);
-            % update bootinds in case you asked for more than what's
-            % possible
-            nboot = size(bootinds,1);
             if ieNotDefined('outshape')
                 outshape = {};
             end
             [varargout,bootmeth] = preallocateperms(self,nboot,bootmeth,outshape,varargin{:});
+            % update bootinds in case you asked for more than what's
+            % possible
+            nboot = size(bootinds,1);
             for m = 1:length(varargout)
                 % redundant assignment to keep parfor happy
                 temp = varargout{m};
@@ -485,12 +485,15 @@ classdef GLM < Saveable
             [varargout,permmeth] = preallocateperms(self,nperms,...
                 permmeth,outshape,varargin{:});
             perminds = preparesamplepermflips(self,nperms);
-            for p = 1:size(perminds,1);
-                permd = drawpermflipsample(self,perminds(p,:));
-                for m = 1:length(varargout)
-                    varargout{m}(:,:,p) = feval(permmeth{m},permd,...
+            for m = 1:length(varargout)
+                % redundant assigment to keep parfor happy
+                temp = varargout{m};
+                parfor p = 1:size(perminds,1);
+                    permd = drawpermflipsample(self,perminds(p,:));
+                    temp(:,:,p) = feval(permmeth{m},permd,...
                         varargin{:});
                 end
+                varargout{m} = temp;
             end
         end
 
@@ -531,13 +534,13 @@ classdef GLM < Saveable
                 outshape = {};
             end
             bootinds = self.preparesampleboots(nboot);
-            % update bootinds in case you asked for more than what's
-            % possible
-            nboot = size(bootinds,1);
             % NB, you will get nans at the end of bootest if you ask for
             % more boots than is possible. prctile handles this well.
             [varargout,bootmeth] = preallocateperms(self,nboot,bootmeth,...
                 outshape,varargin{:});
+            % update bootinds in case you asked for more than what's
+            % possible
+            nboot = size(bootinds,1);
             for m = 1:length(varargout)
                 % redundant assignment to keep parfor happy
                 temp = varargout{m};
@@ -549,13 +552,21 @@ classdef GLM < Saveable
             end
         end
 
-        function w = discriminant(self,conmat)
-        % fit linear discriminant(s) w for the contrast(s) in conmat. Uses
-        % a shrinkage covariance estimator (see covdiag.m).
+        function varargout = discriminant(self,varargin)
+        % fit linear discriminant(s) w for the the contrast matrices in all
+        % subsequent inputs. Uses a shrinkage covariance estimator (see
+        % covdiag.m).
         %
-        % w = discriminant(self,conmat)
+        % In general, the slow part of this method is calculating the
+        % covariance matrix. This is the same for all decoders so entering
+        % multiple inputs can speed things up.
+        %
+        % varargout = discriminant(self,varargin)
             sa = covdiag(residuals(self));
-            w = contrast(self,conmat) / sa;
+            varargout = cell(1,nargout);
+            for n = 1:length(varargout)
+                varargout{n} = contrast(self,varargin{n}) / sa;
+            end
         end
 
         function model = infomodel(self,w)
