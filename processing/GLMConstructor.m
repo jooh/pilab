@@ -6,7 +6,7 @@
 %
 % call:
 % model = call(gl,designmat,epimat,chunks)
-classdef GLMConstructor < matlab.mixin.Copyable
+classdef GLMConstructor < Saveable
     properties
         glmclass = 'GLM';
         glmvarargs = {};
@@ -27,7 +27,7 @@ classdef GLMConstructor < matlab.mixin.Copyable
             if ~iscell(gl.cvgroup)
                 gl.cvgroup = num2cell(gl.cvgroup);
             end
-            glm.varargs = varargin;
+            gl.glmvarargs = varargin;
         end
 
         function model = call(self,designmat,epimat,chunks)
