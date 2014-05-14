@@ -7,10 +7,14 @@
 % (default 't')
 %
 % roidata = nifti2roidata(niftis,mask,targetfield)
-function roidata = nifti2roidata(niftis,mask,targetfield)
+function roidata = nifti2roidata(niftis,mask,targetfield,setclass)
 
 if ieNotDefined('targetfield')
     targetfield = 't';
+end
+
+if ieNotDefined('setclass')
+    setclass = 'double';
 end
 
 V = spm_vol(niftis);
@@ -19,7 +23,7 @@ ncon = numel(V);
 % number of valid entries
 nroi = sum(mask(:));
 
-roidata.(targetfield) = NaN([ncon nroi]);
+roidata.(targetfield) = NaN([ncon nroi],setclass);
 roidata.cols_roi = cell(1,nroi);
 roidata.rows_contrast = cell(ncon,1);
 
