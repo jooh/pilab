@@ -277,36 +277,8 @@ classdef MriVolume < BaseVolume
         % using a gaussian filter with fwhm mm. Smoothing is done in the
         % original 3D shape of the volume and the mask is re-applied after
         % smoothing.
-            if fwhm==0
-                % quick and easy
-                return
-            end
-            sigma = fwhm / sqrt(8*log(2));
-            % configure filter
-            % convert fwhm to standard deviation of gaussian
-            % get sigma in voxel size units
-            sigmavox = sigma ./ self.voxsize;
-            % make a filter
-            % filter size should be big enough to cover gaussian
-            fsize = ceil(3*sigmavox)*2+1;
-            % 1D filter placeholder
-            dsize = ones(1,3);
-            for dat = 1:self.nsamples
-                datmat = self.data2mat(self.data(dat,:));
-                % take advantage of the fact that smoothing thrice with 3 1D
-                % gaussians is equivalent to but faster than smoothing once
-                % with a 3D gaussian (also gets around the issue that
-                % smooth3 requires a symmetric 3D kernel, with a scalar
-                % sigma)
-                for dim = 1:3
-                    dimsize = dsize;
-                    dimsize(dim) = fsize(dim);
-                    datmat = smooth3(datmat,'gaussian',dimsize,...
-                        sigmavox(dim));
-                end
-                % return to data
-                self.data(dat,:) = datmat(self.mask);
-            end
+        self.data = smoothdatavecs(self.data,fwhm,self.mask~=0,...
+            self.voxsize);
         end
 
         function vol = copy(self,dat,meta);
