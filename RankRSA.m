@@ -1,8 +1,14 @@
-% GLM sub-class for representational similarity analysis.
-% gl = RSAGLM(modelrdms,datardms)
+% Spearman rho-based representational similarity analysis. See also the RSA,
+% GLM superclasses.
+%
+% gl = RankRSA(modelrdms,datardms)
 classdef RankRSA < RSA
     methods
         function gl = RankRSA(modelrdms,datardms)
+            if nargin==0
+                modelrdms = [];
+                datardms = [];
+            end
             % use super-class to initialise            
             gl = gl@RSA(modelrdms,datardms);
             % then rank trans and Z score so that linear fits become
