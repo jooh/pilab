@@ -11,7 +11,7 @@ classdef RSA < GLM
 
     methods
         function gl = RSA(modelrdms,datardms)
-            if nargin == 0
+            if nargin == 0 || (isempty(modelrdms) && isempty(datardms))
                 Xvec = [];
                 datavec = [];
             else
@@ -124,7 +124,7 @@ classdef RSA < GLM
             end
             removedprop = (self(1).nsamples - bootglm(1).nsamples) / ...
                 self(1).nsamples;
-            assert([removedprop < 1,'bootsample removed everything. ' ...
+            assert(removedprop < 1,['bootsample removed everything. ' ...
                 'only one unique inds?']);
         end
 
