@@ -15,7 +15,8 @@
 function [res,nulldist,bootdist] = roidata_rsa(disvol,predictors,varargin)
 
 getArgs(varargin,{'rsaclass','RankRSA','nperm',1,'nboot',0,...
-    'rsaclassargs',{},'splitrsaclass','SplitRankRSA','splitrsaclassargs',{}});
+    'rsaclassargs',{},'splitrsaclass','',...
+    'splitrsaclassargs',{}});
 
 if ~iscell(rsaclassargs)
     % this extra bit of flexibility helps with cases where you just want to
