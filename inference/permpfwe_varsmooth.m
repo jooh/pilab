@@ -13,8 +13,8 @@
 % voxsize: ([])
 % tail: (default 'right')
 %
-% [p,pseudot] = permpvalue_varsmooth(permest,permvar,mask,varargin)
-function [p,pseudot] = permpvalue_varsmooth(permest,permvar,mask,varargin)
+% [p,pseudot] = permpfwe_varsmooth(permest,permvar,mask,varargin)
+function [p,pseudot] = permpfwe_varsmooth(permest,permvar,mask,varargin)
 
 getArgs(varargin,{'fwhm',10,'voxsize',[],'tail','right'});
 assert(ndims(permest)==2 && ndims(permvar)==2,...
@@ -38,5 +38,5 @@ smoothvar = smoothdatavecs(permvar',fwhm,mask,voxsize);
 pseudotdist = permest' ./ smoothvar;
 
 % max stat p value as usual
-p = maxstatpfwe(pseudotdist,tail);
+p = permpfwe(pseudotdist,tail);
 pseudot = pseudotdist(1,:);

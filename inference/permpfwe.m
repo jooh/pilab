@@ -2,8 +2,8 @@
 % permutations are in rows, features in columns. The first row is assumed
 % to contain the true, unpermuted effect.
 %
-% [pfwe,pthresh] = maxstatpfwe(nulldist,tail)
-function [pfwe,pthresh] = maxstatpfwe(nulldist,tail)
+% [pfwe,pthresh] = permpfwe(nulldist,tail)
+function [pfwe,pthresh] = permpfwe(nulldist,tail)
 
 [nperms,ndata] = size(nulldist);
 assert(ndims(nulldist)==2,'can only support 2d inputs, got %dd',...
