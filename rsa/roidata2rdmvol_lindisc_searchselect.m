@@ -1,9 +1,18 @@
+%
+%
+% (varargin,{'split',[],'glmvarargs',{{}},'cvsplit',[],...
+    %'glmclass','GLM','sterrunits',1,'crossvalidate',1,...
+    %'minvoxeln',1,'crosscon',[],...
+    %'subsplit',[],'maskns',[],'predictor',[],...
+    %'rsaclass','RankRSA','rsaclassargs',{},'minn',0});
+%
+% [meandisvol,sessdisvolcell,roispheres] = roidata2rdmvol_lindisc_searchselect(rois,designvol,epivol,masks,varargin)
 function [meandisvol,sessdisvolcell,roispheres] = roidata2rdmvol_lindisc_searchselect(rois,designvol,epivol,masks,varargin)
 
-getArgs(varargin,{'split',[],'glmvarargs',{{}},'cvsplit',[],...
+getArgs(varargin,{'split',[],'glmvarargs',{},'cvsplit',[],...
     'glmclass','GLM','sterrunits',1,'crossvalidate',1,...
     'minvoxeln',1,'crosscon',[],...
-    'subsplit',[],'testsubsplit',[],'maskns',[],'predictor',[],...
+    'subsplit',[],'maskns',[],'predictor',[],...
     'rsaclass','RankRSA','rsaclassargs',{},'minn',0});
 
 % configure the basic RDM analysis
@@ -18,6 +27,11 @@ if ~matlabpool('size')
 else
     runfun = 'runrois_spmd';
 end
+
+if ~iscell(rsaclassargs)
+    rsaclassargs = {rsaclassargs};
+end
+
 % configure rsa
 rsaconstruct = RSAConstructor(rsaclass,predictor,rsaclassargs{:});
 rsafit = GLMProcessor('fit',[],1);
@@ -27,9 +41,19 @@ fullprocessor = SecondLevelProcessor(glman_rdm,rsafull);
 nsizes = numel(maskns);
 
 % RSA contrast matrix
-allcons = allpairwisecontrasts(feval(class(epivol.data),...
-    designvol.nfeatures));
-npairs = size(allcons,1);
+% TODO how deal with cross-decoding here? Probably need to set up
+% processors here. 
+% the number of processors in glman_rdm gives the number of inputs to
+% provide to discriminant (and the number of outputs to expect). 
+% this is a little hacky but for now it's a workable way to retrieve the
+% training conmats
+nweight = numel(glman_rdm.processor);
+conmats = arrayfun(@(thisproc)thisproc.varargs{4},glman_rdm.processor,...
+    'uniformoutput',false);
+discriminator = GLMProcessor('discriminant',[],nweight,conmats{:});
+% pass handle to same constructor as main glman_rdm
+getweights = GLMMetaProcessor(glman_rdm.constructor,discriminator);
+npairs = size(conmats{1},1);
 
 % there are 3 split levels here: 
 % split: defines which sessions are used for computing RDMs (the
@@ -43,14 +67,12 @@ npairs = size(allcons,1);
 if ischar(subsplit)
     subsplit = eval(subsplit);
 end
-if isempty(testsubsplit)
-    % same split in train and test (only works if the split
-    % contains the same number of runs in train and test)
-    testsubsplit = subsplit;
-end
 usub = unique(subsplit);
 nsub = length(usub);
 
+if isempty(split)
+    split = ones(designvol.desc.samples.nunique.chunks,1);
+end
 nsplit = numel(unique(split));
 if nsplit > 1
     [designcell,epicell] = splitvol(split,designvol,epivol);
@@ -112,7 +134,7 @@ for sp = 1:nsplit
             definingcon = repmat({predictor.name},[nsizes 1]);
             names = cell(nsizes,1);
             thresholds = NaN([nsizes,1]);
-            weights = cell(nsizes,1);
+            weights = cell(nsizes,nweight);
             for n = 1:nsizes
                 thissize = maskns(n);
                 % make the ROI volume in the test data according to
@@ -122,12 +144,10 @@ for sp = 1:nsplit
                     'union');
                 names{n} = sprintf('%s %s (%d voxels)',...
                     maskname,predictor.name,thissize);
-                % NEW - now, obtain the discriminant weights based on the
-                % data
-                trainmodel = GLM(designtrain.data,...
-                    epitrain.data(:,roimat(n,:)~=0));
-                weights{n} = discriminant(trainmodel,...
-                    allcons);
+                % obtain some set of weights
+                [weights{n,1:nweight}] = call(getweights,...
+                    designtrain.data,epitrain.data(:,roimat(n,:)~=0),...
+                    designtrain.meta.samples.chunks);
             end % n = 1:nsizes
 
             roispheres.(maskname){sp,subsp} = MriVolume(roimat,epimask,...
@@ -141,7 +161,7 @@ for sp = 1:nsplit
             clear epitrain designtrain trainind trainchunks trainmodel sl
 
             % TEST DATA PROCESSING
-            testind = testsubsplit==thissuper;
+            testind = subsplit==thissuper;
             testchunks = uchunks(testind);
             epitest = epimask.selectbymeta('chunks',testchunks);
             designtest = designvol.selectbymeta('chunks',testchunks);
@@ -149,13 +169,19 @@ for sp = 1:nsplit
             % this involves iteration so I suppose another ROI Processor is
             % in order technically (but we'd struggle to pass the weights
             % appropriately so let's not)
-            testinfot = NaN(npairs,nsizes);
+            testinfot = NaN(npairs,nsizes,nweight);
             for n = 1:nsizes
                 testmodel = GLM(designtest.data,...
                     epitest.data(:,roimat(n,:)~=0));
-                % now make a disvol somehow
-                testinfot(:,n) = infotmap(testmodel,weights{n},allcons);
+                % now the fun twist is that there may be multiple weights
+                for w = 1:nweight
+                    testinfot(:,n,w) = infotmap(testmodel,weights{n,w},...
+                        conmats{w});
+                end
             end
+            % collapse weight dimension to average cross-decoders (e.g., A
+            % to B and B to A)
+            testinfot = mean(testinfot,3);
             roip = ROIProcessor(roispheres.(maskname){sp,subsp},[]);
             splitdisvol{mask,subsp} = result2roivol(roip,testinfot);
 
@@ -174,7 +200,7 @@ for sp = 1:nsplit
     fprintf('finished split in %s\n',seconds2str(etime(clock,tstart)));
 end % sp = 1:nsplit
 
-if nsplit==1
+if nsplit<2
     % quick and easy
     meandisvol = sessdisvolcell{1};
 else
