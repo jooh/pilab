@@ -1,14 +1,12 @@
-% convert vector to matrix form and pass on to datamat2nift.
-% NB, mask can be a logical matrix or linear indices
+% convert vector to matrix form and pass on to datamat2nifti.
+%
+% data: 1D row or column vector 
+% mask: 3D logical array form apping data vector to 3D
+% outpath: char array where nifti gets written
+% V: volume header (see spm_vol)
 %
 % datavec2nifti(data,mask,outpath,V)
 function datavec2nifti(data,mask,outpath,V)
 
-if isa(data,'logical')
-    datamat = false(V.dim);
-else
-    datamat = zeros(V.dim,class(data));
-end
-datamat(mask) = data;
-
+datamat = datavec2mat(data,mask);
 datamat2nifti(datamat,outpath,V);
