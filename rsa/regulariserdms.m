@@ -18,7 +18,9 @@ function [regrdms,udis,ureg] = regulariserdms(rdms,regulariser)
 
 % find the unique combinations of regulariser dissimilarities
 regulariser = asrdmvec(regulariser);
-ureg = unique(regulariser,'rows');
+% remove any NaN dissimilarities across all models.
+ureg = unique(regulariser(any(~isnan(regulariser),2),:),'rows');
+assert(~isempty(ureg),'no non-nan dissimilarities in regulariser');
 nu = length(ureg);
 
 rdms = asrdmvec(rdms);
