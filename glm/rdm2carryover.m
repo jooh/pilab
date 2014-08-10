@@ -11,6 +11,8 @@
 % p = rdm2carryover(onsets,conind,rdm,nstep)
 function p = rdm2carryover(onsets,conind,rdm,nstep)
 
+assert(issorted(onsets),'onsets must be in ascending time order');
+
 if ieNotDefined('nstep')
     nstep = 1;
 end
