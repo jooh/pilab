@@ -15,6 +15,7 @@
 %   no modulation)
 % dur: (0) duration of each response (default means a single bin duration)
 %
+% [X,onserr] = convolveonsets(onsets,conind,tr,n,varargin)
 function [X,onserr] = convolveonsets(onsets,conind,tr,n,varargin)
 
 ntrials = numel(onsets);
@@ -57,7 +58,10 @@ onserr = onsets-(superons/nbin-1);
 % plug in each trial's onset in the right column
 for t = 1:ntrials
     superx(superons(t):superons(t)+superdur(t),conind(t)) = 1;
-    superx(superons(t):superons(t)+superdur(t),nreg+1:end) = p(t,:);
+    if npara
+        superx(superons(t):superons(t)+superdur(t),nreg+1:end) = p(...
+            repmat(t,[superdur(t)+1,1]),:);
+    end
 end
 
 % convolve with HRF
@@ -66,3 +70,5 @@ convx = conv2(superx,hrf);
 % downsample to TR (and chop off over-shoot for free)
 inds = floor(linspace(1,nsuper,n));
 X = convx(inds,:);
+
+% 
