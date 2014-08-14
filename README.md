@@ -75,7 +75,7 @@ stage. Use at your own risk, and please validate results extensively.
 
 # references
 Nili, H., Wingfield, C., Su, L., Walther, A., & Kriegeskorte, N. (2014). [A
-Matlab toolbox for representational similarity
+toolbox for representational similarity
 analysis](http://dx.doi.org/10.1371/journal.pcbi.1003553). PLoS Computational
 Biology, 10, e1003553.
 
