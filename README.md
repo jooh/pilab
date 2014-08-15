@@ -23,8 +23,6 @@ analysis) are implemented as special (sub) cases of the general linear
 model. Convenient class methods enable bootstrapping and permutation
 testing.
 
-![Class hierarchy](classhierarchy.png "GLM class hierarchy")
-
 ## containers
 Data and metadata are stored together in BaseVolume and MriVolume instances.
 The basic representation of data is 2D (samples by features), and metadata
@@ -51,7 +49,7 @@ rsa/roidata2rdmvol_lindisc) and for comparing data and model RDMs
 
 ### decoding
 Information-based decoding using linear discriminant analysis is supported
-by decoding/roidata_lindisc.
+by rsa/roidata_lindisc.
 
 ### random effects analysis
 Results from the rsa and decoding functions are saved in a common format,
@@ -76,6 +74,11 @@ no guarantees are provided concerning the accuracy of results at this
 stage. Use at your own risk, and please validate results extensively.
 
 # references
+Nili, H., Wingfield, C., Su, L., Walther, A., & Kriegeskorte, N. (2014). [A
+toolbox for representational similarity
+analysis](http://dx.doi.org/10.1371/journal.pcbi.1003553). PLoS Computational
+Biology, 10, e1003553.
+
 Kriegeskorte, N., Goebel, R., & Bandettini, P. A. (2006).
 [Information-based functional brain
 mapping](http://dx.doi.org/10.1073/pnas.0600244103). Proceedings of the
