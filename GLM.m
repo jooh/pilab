@@ -599,6 +599,17 @@ classdef GLM < Saveable
             t = cons ./ errs;
         end
 
+        function [pcorrect,model] = classify(self,w,conmat)
+        % return the proportion correctly classified samples computed on
+        % the infomodel(self,w). 
+            model = infomodel(self,w);
+            % get the predicted contrast timecourse
+            correctlabel = vertcat(model.X) * conmat';
+            % compare the sign to the discriminant timecourse
+            wascorrect = vertcat(model.data) .* correctlabel > 0;
+            pcorrect = sum(wascorrect,1) / sum([model.nsamples]);
+        end
+
         function mahdist = infomahalanobis(self,w,conmat)
         % return the mahalonobis distance between the points in conmat
         % computed on the infomodel(self,w).
