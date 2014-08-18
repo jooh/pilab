@@ -212,10 +212,8 @@ classdef GLM < Saveable
                 % set property in train and test
                 [self.(property)] = deal(values(v));
                 % cross-validate fit with chosen property
-                splitres = cvpredictionrun(self,'predictY','rsquare',...
+                meds(v,:) = cvpredictionrun(self,'predictY','rsquare',...
                     [1 self(1).nfeatures]);
-                % update with median across splits
-                meds(v,:) = median(splitres,3);
             end
             % find winning value for each feature
             [~,inds] = selectfun(meds,[],1);
@@ -320,7 +318,7 @@ classdef GLM < Saveable
             end
         end
 
-        function cvres = cvpredictionrun(self,trainmeth,testmeth,outshape)
+        function [meds,cvres] = cvpredictionrun(self,trainmeth,testmeth,outshape)
         % crossvalidate the performance of some prediction trainmeth (e.g.,
         % predictY) using some testmeth (e.g., rsquare). this method is for
         % cases where you want to do out of sample regression, that is,
@@ -329,7 +327,7 @@ classdef GLM < Saveable
         % classification, that is predicting the columns of the design
         % matrix, use cvclassificationrun. 
         %
-        % cvres = cvpredictionrun(self,trainmeth,testmeth,outshape)
+        % [meds,cvres] = cvpredictionrun(self,trainmeth,testmeth,outshape)
             if ieNotDefined('outshape')
                 % do a self test to infer size of output
                 prediction = self.(trainmeth)(self.X);
@@ -348,6 +346,7 @@ classdef GLM < Saveable
                 prediction = train.(trainmeth)(test.X);
                 cvres(:,:,s) = test.(testmeth)(prediction);
             end
+            meds = median(cvres,3);
         end
 
         function [estimates,sterrs,bootest] = bootstraprunfit(self,nboot)
