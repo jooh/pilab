@@ -137,10 +137,9 @@ classdef RSA < GLM
         %
         % model = selectconditions(self,cons)
             % just NaN out the correct parts of the Xrdm
-            X = self(1).Xrdm;
-            flipv = true([self(1).ncon 1]);
-            flipv(cons) = false;
-            X(flipv,flipv,:) = NaN;
+            X = NaN(size(self(1).Xrdm));
+            X(cons,:,:) = self(1).Xrdm(cons,:,:);
+            X(:,cons,:) = self(1).Xrdm(:,cons,:);
             X(diagind(size(X))) = 0;
             for r = 1:numel(self)
                 model(r) = feval(class(self),X,self(r).datardm);
@@ -148,7 +147,7 @@ classdef RSA < GLM
             end
         end
 
-        function [meanr2,r2bycon,meanpredict,predictbycon] = crossvalidateconditions(self)
+        function [meanr2,meanpredict,r2bycon,predictbycon] = crossvalidateconditions(self)
         % predict the dissimilarities for one condition based on fitted
         % dissimilarities for all other conditions - ie,
         % leave-one-condition out rather than leave-one-run out (see
@@ -159,8 +158,7 @@ classdef RSA < GLM
         % across folds. Use e.g. bootstrapping to account for
         % this.
         %
-        % [meanr2,r2bycon,meanpredict,predictbycon] = crossvalidateconditions(self)
-            allinds = 1:self(1).ncon;
+        % [meanr2,meanpredict,r2bycon,predictbycon] = crossvalidateconditions(self)
             % store prediction performance for each condition
             r2bycon = NaN([self(1).ncon self(1).nfeatures]);
             % store the fitted response for each condition. Because the X
@@ -172,8 +170,9 @@ classdef RSA < GLM
                 self(1).nfeatures]);
             % vectorised data matrix (one entry per iteration, later
             % collapsed)
+            allinds = 1:self(1).ncon;
             for con = allinds
-                % use train / ~train to explicitly divide train/test
+                % use test / ~test to explicitly divide train/test
                 % dissimilarities
                 test = allinds==con;
                 % split data by creating separate train and test model
@@ -187,15 +186,17 @@ classdef RSA < GLM
                 % because we are working with RDMs, each X in testmodel is
                 % identical. So although the prediction spans all splits we
                 % just need to store the first nsamples
-                predictbycon(con,test,:) = prediction(...
-                    1:testmodel(1).nsamples,:);
+                predictbycon(con,:,:) = datavec2mat(...
+                    prediction(1:testmodel(1).nsamples,:),repmat(...
+                    testmodel(1).validvec,[1 testmodel(1).nfeatures]),...
+                    'NaN');
             end
             % mean of all the predictions for each dissimilarity (sort of
             % like making a weave - every dissimilarity features in 2
             % predictions. Once when you hit the right row, once when you
             % hit the right column).
-            keyboard;
-            meanpredict = squeeze(sum(predictbycon,1)) / 2;
+            meanpredict = squeeze(nansum(predictbycon,1)) / 2;
+            meanr2 = mean(r2bycon,1);
         end
     end
 end
