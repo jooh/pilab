@@ -1,9 +1,9 @@
-% parse input arguments to plot_lindisc and return processed data ready for
+% parse input arguments to plot_roidata and return processed data ready for
 % plotting. This function is mainly useful if you want to use a custom
-% plugin plot function in e.g. aamod_pilab_decode_lindisc_visualisation.
+% plugin plot function in e.g. aamod_pilab_rsa_visualisation.
 %
-% [m,errs,p,ylab] = plot_lindisc_parseargs(res,varargin)
-function [m,errs,p,ylab] = plot_lindisc_parseargs(res,varargin)
+% [m,errs,p,ylab] = plot_roidata_parseargs(res,varargin)
+function [m,errs,p,ylab] = plot_roidata_parseargs(res,varargin)
 
 mlabel = [];
 getArgs(varargin,{'mtarget','t','errtarget',[],'ptarget','ppara',...

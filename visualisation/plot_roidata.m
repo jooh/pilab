@@ -1,13 +1,15 @@
-% standard bar chart visualisations for results from roidata_lindisc
+% standard bar chart visualisations for results from some roidata struct
+% (output from e.g. roidata_rsa).
 %
-% plot_lindisc(figdir,res,varargin)
-function plot_lindisc(figdir,res,varargin)
+% plot_roidata(figdir,res,groupres,varargin)
+function plot_roidata(figdir,res,groupres,varargin)
 
-[m,errs,p,ylab] = plot_lindisc_parseargs(res,varargin{:});
+[m,errs,p,ylab] = plot_roidata_parseargs(res,varargin{:});
 
 mkdirifneeded(figdir);
 
 [ncon,nroi] = size(m);
+nsub = numel(res.z_subject);
 
 roicolors = hsv(nroi) * .9;
 concolors = hsv(ncon) * .9;
@@ -16,6 +18,8 @@ concolors = hsv(ncon) * .9;
 fighand = figurebetter([],[30 30],1/2,false);
 % make it current fig
 figure(fighand);
+% overlay singles in glasbey map
+set(gcf,'defaultaxescolororder',cmap_glasbey(nsub));
 
 conclean = stripbadcharacters(res.rows_contrast,' ');
 roiclean = stripbadcharacters(res.cols_roi);
@@ -29,11 +33,25 @@ for r = 1:nroi
     thism = m(:,r);
     thiserr = errs(:,r);
     thisp = p(:,r);
-    plotsub(fighand,thism,thiserr,thisp,concolors,conclean);
+    [fh,bh,eh,th] = plotsub(fighand,thism,thiserr,thisp,concolors,conclean);
     ylabel(ylab);
     title(thisroi);
     box off
     printstandard(fullfile(figdir,sprintf('byroi_%s',thisroi)));
+    % singles analysis
+    hold on;
+    ph = plot(1:length(thism),squeeze(groupres.r(:,r,:)),'.',...
+        'markersize',12);
+    % set barchart underneath to outlines for clarity
+    set(bh,'facecolor',[1 1 1],'edgecolor',[0 0 0]);
+    % add a legend
+    L = legend(ph,res.z_subject,'plotboxaspectratiomode','auto');
+    lax = subplot(4,4,12);
+    centerinaxis(L,lax);
+    set(L,'box','off');
+    delete(eh);
+    delete(th);
+    printstandard(fullfile(figdir,sprintf('singles_byroi_%s',thisroi)));
     clf(fighand);
 end
 
@@ -44,19 +62,33 @@ for c = 1:ncon
     thism = m(c,:);
     thiserr = errs(c,:);
     thisp = p(c,:);
-    plotsub(fighand,thism,thiserr,thisp,roicolors,roiclean);
+    [fh,bh,eh,th] = plotsub(fighand,thism,thiserr,thisp,roicolors,roiclean);
     ylabel(ylab);
     title(conclean{c});
     box off
     printstandard(fullfile(figdir,sprintf('bycon_%s',thiscon)));
+    % singles analysis
+    hold on;
+    ph = plot(1:length(thism),squeeze(groupres.r(c,:,:)),'.',...
+        'markersize',12);
+    % set barchart underneath to outlines for clarity
+    set(bh,'facecolor',[1 1 1],'edgecolor',[0 0 0]);
+    % add a legend
+    L = legend(ph,res.z_subject,'plotboxaspectratiomode','auto');
+    lax = subplot(4,4,12);
+    centerinaxis(L,lax);
+    set(L,'box','off');
+    delete(eh);
+    delete(th);
+    printstandard(fullfile(figdir,sprintf('singles_bycon_%s',thiscon)));
     clf(fighand);
 end
 
 close(fighand);
 
-function plotsub(fighand,thism,thiserr,thisp,concolors,conclean)
+function [fh,bh,eh,th] = plotsub(fighand,thism,thiserr,thisp,concolors,conclean)
 
-barchart(thism,'errors',thiserr,'facecolor',concolors,...
+[fh,bh,eh] = barchart(thism,'errors',thiserr,'facecolor',concolors,...
     'x',1:length(thism),'labels',conclean,'fighand',fighand);
 % nansum here because errs can be all NaN
-T = addptext(1:length(thism),nansum(cat(3,thism,thiserr),3),thisp);
+th = addptext(1:length(thism),nansum(cat(3,thism,thiserr),3),thisp);
