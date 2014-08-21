@@ -147,25 +147,24 @@ classdef RSA < GLM
             end
         end
 
-        function [meanr2,meanpredict,r2bycon,predictbycon] = crossvalidateconditions(self)
+        function [medr2,meanpredict,r2bycon,predictbycon] = cvpredictionconditions(self)
         % predict the dissimilarities for one condition based on fitted
         % dissimilarities for all other conditions - ie,
         % leave-one-condition out rather than leave-one-run out (see
-        % crossvalidatefit) or leave-one-dissimilarity out.
+        % cvpredictionrun).
         %
         % Note that although each train/test split is independent (unlike
         % leave-one-dissimilarity out), the test estimates are dependent
         % across folds. Use e.g. bootstrapping to account for
         % this.
         %
-        % [meanr2,meanpredict,r2bycon,predictbycon] = crossvalidateconditions(self)
+        % [medr2,meanpredict,r2bycon,predictbycon] = cvpredictionconditions(self)
             % store prediction performance for each condition
             r2bycon = NaN([self(1).ncon self(1).nfeatures]);
             % store the fitted response for each condition. Because the X
             % is identical across splits in RSA the prediction is the same
             % across splits. So only need to store one. (need 2d matrix
             % because the predictions are overlapping).
-            % TODO - debug
             predictbycon = zeros([self(1).ncon self(1).nsamples ...
                 self(1).nfeatures]);
             % vectorised data matrix (one entry per iteration, later
@@ -196,7 +195,7 @@ classdef RSA < GLM
             % predictions. Once when you hit the right row, once when you
             % hit the right column).
             meanpredict = squeeze(nansum(predictbycon,1)) / 2;
-            meanr2 = mean(r2bycon,1);
+            medr2 = median(r2bycon,1);
         end
     end
 end
