@@ -14,6 +14,7 @@
 % consequences be damned)
 % varsmoothmask: []
 % varsmoothfwhm: 8 (mm)
+% minn: 2 skip any roi with fewer than this n
 % contrasts: calculate differences between particular conditions. char that
 % gets evaled or struct with fields:
 %   name
@@ -21,12 +22,13 @@
 %   conminus
 %   tail
 %
-% [meanres,nulldist,bootdist] = roidata_rfx(subres,[varargin])
-function [meanres,nulldist,bootdist] = roidata_rfx(subres,varargin)
+% [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,[varargin])
+function [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,varargin)
     
 getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','t','transfun',[],...
     'assumeregister',false,'varsmoothmask',[],'varsmoothfwhm',8,...
-    'contrasts',struct('name',{},'conplus',{},'conminus',{},'tail',{})});
+    'contrasts',struct('name',{},'conplus',{},'conminus',{},'tail',{}),...
+    'minn',2});
 
 if assumeregister
     % just take rois from first subject
@@ -40,12 +42,6 @@ else
 end
 nroi = length(urois);
 
-if ~isempty(contrasts)
-    if ischar(contrasts)
-        contrasts = feval(contrasts);
-    end
-    assert(isstruct(contrasts),'contrasts must be a struct');
-end
 
 % but we do assume that contrasts are identical.  we could support
 % this case in theory but let's not for now since it likely
@@ -64,7 +60,6 @@ groupres = struct('rows_contrast',{subres(1).rows_contrast},...
 if assumeregister
     % hey, this is easy
     groupres.(targetfield) = cat(3,subres.(targetfield));
-    assert(isreal(groupres.(targetfield)),'imaginary output!');
     assert(~any(isnan(groupres.(targetfield)(:))),...
         'nans in targetfield not supported in assumeregister mode');
 else
@@ -82,10 +77,25 @@ else
     end
 end
 
+if ~isempty(transfun)
+    if ischar(transfun)
+        % apply some transform, e.g. fisher
+        groupres.(targetfield) = feval(transfun,groupres.(targetfield));
+    else
+        % direct call on function handle
+        groupres.(targetfield) = transfun(groupres.(targetfield));
+    end
+end
+assert(isreal(groupres.(targetfield)),'imaginary output!');
+
 ptails = repmat({'right'},[ncon,1]);
 
 % add in the contrasts here
 if ~isempty(contrasts)
+    if ischar(contrasts)
+        contrasts = feval(contrasts,groupres.rows_contrast);
+    end
+    assert(isstruct(contrasts),'contrasts must be a struct');
     for c = 1:length(contrasts)
         % find the rows corresponding to each condition
         [~,posind] = intersect(groupres.rows_contrast,...
@@ -115,17 +125,27 @@ if ~isempty(contrasts)
     end
 end
 
+% remove undersized ROIs
+n = sum(~isnan(groupres.(targetfield)),3);
+% check that sample size is the same for all contrasts by comparing
+% each to the first
+r = bsxfun(@eq,n,n(1,:));
+assert(all(r(:)),...
+    'mismatched sample size across contrasts for a given ROI');
+badroi = n(1,:) < minn;
+logstr('removing %d/%d rois with sample size <%d\n',sum(badroi),nroi,minn);
+
+% drop those rois
+groupres.(targetfield)(:,badroi,:) = [];
+groupres.cols_roi(badroi) = [];
+if isfield(groupres,'nfeatures')
+    groupres.nfeatures(:,badroi,:) = [];
+end
+nroi = size(groupres.(targetfield),2);
+
 ncon = numel(groupres.rows_contrast);
 
-if ~isempty(transfun)
-    if ischar(transfun)
-        % apply some transform, e.g. fisher
-        groupres.(targetfield) = feval(transfun,groupres.(targetfield));
-    else
-        % direct call on function handle
-        groupres.(targetfield) = transfun(groupres.(targetfield));
-    end
-end
+groupres.z_subject = {subres.name};
 
 % now we can get the mean struct 
 meanres = struct('rows_contrast',{groupres.rows_contrast},...
@@ -166,11 +186,6 @@ if ~isempty(varsmoothmask)
     meanres.pfwepermvarsm = NaN(size(meanres.t));
 end
 
-% check that sample size is the same for all contrasts by comparing
-% each to the first
-r = bsxfun(@eq,meanres.n,meanres.n(1,:));
-assert(all(r(:)),...
-    'mismatched sample size across contrasts for a given ROI');
 
 meanres.pperm = NaN(size(meanres.t));
 meanres.pfweperm = NaN(size(meanres.t));
