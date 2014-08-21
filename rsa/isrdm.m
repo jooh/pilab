@@ -12,6 +12,12 @@ if r ~= c
     return
 end
 
+if r<2
+    % too small
+    yes = false;
+    return;
+end
+
 % 0 diagonal for all RDMs (stacked in 3rd dim)
 diagonals = rdm(diagind([r c z]));
 if ~all(diagonals==0) && ~all(diagonals==1)
