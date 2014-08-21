@@ -39,19 +39,21 @@ for r = 1:nroi
     box off
     printstandard(fullfile(figdir,sprintf('byroi_%s',thisroi)));
     % singles analysis
-    hold on;
-    ph = plot(1:length(thism),squeeze(groupres.r(:,r,:)),'.',...
-        'markersize',12);
-    % set barchart underneath to outlines for clarity
-    set(bh,'facecolor',[1 1 1],'edgecolor',[0 0 0]);
-    % add a legend
-    L = legend(ph,res.z_subject,'plotboxaspectratiomode','auto');
-    lax = subplot(4,4,12);
-    centerinaxis(L,lax);
-    set(L,'box','off');
-    delete(eh);
-    delete(th);
-    printstandard(fullfile(figdir,sprintf('singles_byroi_%s',thisroi)));
+    if ~isempty(groupres)
+        hold on;
+        ph = plot(1:length(thism),squeeze(groupres.r(:,r,:)),'.',...
+            'markersize',12);
+        % set barchart underneath to outlines for clarity
+        set(bh,'facecolor',[1 1 1],'edgecolor',[0 0 0]);
+        % add a legend
+        L = legend(ph,res.z_subject,'plotboxaspectratiomode','auto');
+        lax = subplot(4,4,12);
+        centerinaxis(L,lax);
+        set(L,'box','off');
+        delete(eh);
+        delete(th);
+        printstandard(fullfile(figdir,sprintf('singles_byroi_%s',thisroi)));
+    end
     clf(fighand);
 end
 
@@ -68,19 +70,21 @@ for c = 1:ncon
     box off
     printstandard(fullfile(figdir,sprintf('bycon_%s',thiscon)));
     % singles analysis
-    hold on;
-    ph = plot(1:length(thism),squeeze(groupres.r(c,:,:)),'.',...
-        'markersize',12);
-    % set barchart underneath to outlines for clarity
-    set(bh,'facecolor',[1 1 1],'edgecolor',[0 0 0]);
-    % add a legend
-    L = legend(ph,res.z_subject,'plotboxaspectratiomode','auto');
-    lax = subplot(4,4,12);
-    centerinaxis(L,lax);
-    set(L,'box','off');
-    delete(eh);
-    delete(th);
-    printstandard(fullfile(figdir,sprintf('singles_bycon_%s',thiscon)));
+    if ~isempty(groupres)
+        hold on;
+        ph = plot(1:length(thism),squeeze(groupres.r(c,:,:)),'.',...
+            'markersize',12);
+        % set barchart underneath to outlines for clarity
+        set(bh,'facecolor',[1 1 1],'edgecolor',[0 0 0]);
+        % add a legend
+        L = legend(ph,res.z_subject,'plotboxaspectratiomode','auto');
+        lax = subplot(4,4,12);
+        centerinaxis(L,lax);
+        set(L,'box','off');
+        delete(eh);
+        delete(th);
+        printstandard(fullfile(figdir,sprintf('singles_bycon_%s',thiscon)));
+    end
     clf(fighand);
 end
 
