@@ -6,7 +6,7 @@
 function [m,errs,p,ylab] = plot_roidata_parseargs(res,varargin)
 
 mlabel = [];
-getArgs(varargin,{'mtarget','t','errtarget',[],'ptarget','ppara',...
+getArgs(varargin,{'mtarget','mean','errtarget',[],'ptarget','ppara',...
     'mlabel','','errlabel','','pthresh',.05});
 
 % fill in a dummy label if nothing else is specified
