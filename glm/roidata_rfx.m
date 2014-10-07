@@ -21,14 +21,20 @@
 %   conplus
 %   conminus
 %   tail
+% customfits: obtain a result by applying some function to the data. char
+% that gets evaled or struct with fields:
+%   name
+%   funhand
+%   cons
+%   tail
 %
 % [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,[varargin])
 function [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,varargin)
     
 getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','t','transfun',[],...
     'assumeregister',false,'varsmoothmask',[],'varsmoothfwhm',8,...
-    'contrasts',struct('name',{},'conplus',{},'conminus',{},'tail',{}),...
-    'minn',2});
+    'contrasts',emptystruct('name','conplus','conminus','tail'),...
+    'customfits',emptystruct('name','funhand','cons','tail'),'minn',2});
 
 if assumeregister
     % just take rois from first subject
@@ -79,16 +85,32 @@ end
 
 if ~isempty(transfun)
     if ischar(transfun)
-        % apply some transform, e.g. fisher
-        groupres.(targetfield) = feval(transfun,groupres.(targetfield));
-    else
-        % direct call on function handle
-        groupres.(targetfield) = transfun(groupres.(targetfield));
+        transfun = str2func(transfun);
     end
+    % apply some transform, e.g. fisher
+    groupres.(targetfield) = transfun(groupres.(targetfield));
 end
 assert(isreal(groupres.(targetfield)),'imaginary output!');
 
 ptails = repmat({'right'},[ncon,1]);
+
+% add in custom fits
+if ~isempty(customfits)
+    if ischar(customfits)
+        customfits = feval(customfits,groupres.rows_contrast);
+    end
+    assert(isstruct(customfits),'customfits must be a struct');
+    for c = 1:length(customfits)
+        if ischar(customfits(c).funhand)
+            customfits(c).funhand = str2func(customfits(c).funhand);
+        end
+        conind = findconind(groupres.rows_contrast,customfits(c).cons);
+        groupres.(targetfield)(end+1,:,:) = customfits(c).funhand(...
+            groupres.(targetfield)(conind,:,:),customfits(c));
+        groupres.rows_contrast{end+1} = customfits(c).name;
+        ptails{end+1} = customfits(c).tail;
+    end
+end
 
 % add in the contrasts here
 if ~isempty(contrasts)
@@ -98,27 +120,19 @@ if ~isempty(contrasts)
     assert(isstruct(contrasts),'contrasts must be a struct');
     for c = 1:length(contrasts)
         % find the rows corresponding to each condition
-        [~,posind] = intersect(groupres.rows_contrast,...
-            contrasts(c).conplus);
-        if isempty(posind)
-            [~,posind] = intersect(groupres.rows_contrast,cellfun(...
-                @(thiscon)['rsa_r_' thiscon],contrasts(c).conplus,...
-                'uniformoutput',false));
-        end
-        assert(~isempty(posind),'did not find %s',contrasts(c).conplus);
-        [~,negind] = intersect(groupres.rows_contrast,...
-            contrasts(c).conminus);
-        if isempty(negind)
-            [~,negind] = intersect(groupres.rows_contrast,cellfun(...
-                @(thiscon)['rsa_r_' thiscon],contrasts(c).conminus,...
-                'uniformoutput',false));
-        end
-        assert(~isempty(negind),'did not find %s',contrasts(c).conminus);
-        assert(~any(intersect(posind,negind)),...
-            'same predictor on both sides of contrast');
+        posind = findconind(groupres.rows_contrast,contrasts(c).conplus);
         % average any multiples
         meanpos = nanmean(groupres.(targetfield)(posind,:,:),1);
-        meanneg = nanmean(groupres.(targetfield)(negind,:,:),1);
+        if isempty(contrasts(c).conminus)
+            % a vs 0 contrast
+            meanneg = zeros(size(meanpos));
+        else
+            % a vs b contrast
+            negind = findconind(groupres.rows_contrast,contrasts(c).conminus);
+            assert(~any(intersect(posind,negind)),...
+                'same predictor on both sides of contrast');
+            meanneg = nanmean(groupres.(targetfield)(negind,:,:),1);
+        end
         groupres.(targetfield)(end+1,:,:) = meanpos-meanneg;
         groupres.rows_contrast{end+1} = contrasts(c).name;
         ptails{end+1} = contrasts(c).tail;
@@ -312,3 +326,28 @@ if nperm > 1 || nboot > 0
     end
 end
 
+%% SUBFUNCTIONS
+function res = fitslope(data,customfit)
+
+[nsamp,nroi,nsub] = size(data);
+res = NaN([1 nroi nsub]);
+for r = 1:nroi
+    valid = ~isnan(data(1,r,:));
+    roidata = squeeze(data(:,r,valid));
+    x = [ones(nsamp,1) customfit.x];
+    b = x \ roidata;
+    res(1,r,valid) = b(2,:);
+end
+
+function res = fitrz(data,customfit)
+
+[nsamp,nroi,nsub] = size(data);
+res = NaN([1 nroi nsub]);
+% the slope estimates come out mostly negative. That doesn't make sense.
+for r = 1:nroi
+    valid = ~isnan(data(1,r,:));
+    roidata = squeeze(data(:,r,valid));
+    x = customfit.x(:);
+    % fisher-transformed correlation coefficient
+    res(1,r,valid) = atanh(zscore(x) \ zscore(roidata));
+end
