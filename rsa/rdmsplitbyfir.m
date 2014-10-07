@@ -1,3 +1,4 @@
+% [outrdm,outnames] = rdmsplitbyfir(rdm,splitrdm)
 function [outrdm,outnames] = rdmsplitbyfir(rdm,splitrdm)
 
 rdmat = asrdmmat(rdm);
@@ -9,14 +10,14 @@ if isstruct(rdm)
     names = {rdm.name};
     wasstruct = true;
 else
-    names = vec2str(1:nrdm,'rdm%02d');
+    names = mat2strcell(1:nrdm,'rdm%02d');
     wasstruct = false;
 end
 
 if isstruct(splitrdm)
     splitnames = {splitrdm.name};
 else
-    splitnames = vec2str(1:nsplit,'split%02d');
+    splitnames = mat2strcell(1:nsplit,'split%02d');
 end
 
 for n = 1:nsplit
