@@ -1,8 +1,8 @@
 % regularise (ie dimensionality reduce) datardms according to some model
 % dissimilarities.  Finds all unique pairings of the regulariser's
 % dissimilarities and replaces those entries in the datardms with the mean.
-% This produces tons of structure in the RDM, but complicates hypothesis
-% testing. 
+% This usually helps bring out structure in the RDM, but complicates
+% hypothesis testing. 
 %
 % INPUTS:
 % datardms: some RDM type (struct, vector, matrix)
@@ -19,7 +19,7 @@ function [regrdms,udis,ureg] = regulariserdms(rdms,regulariser)
 % find the unique combinations of regulariser dissimilarities
 regulariser = asrdmvec(regulariser);
 % remove any NaN dissimilarities across all models.
-ureg = unique(regulariser(any(~isnan(regulariser),2),:),'rows');
+ureg = uniquen(regulariser(any(~isnan(regulariser),2),:),'rows');
 assert(~isempty(ureg),'no non-nan dissimilarities in regulariser');
 nu = length(ureg);
 
@@ -32,7 +32,9 @@ udis = NaN([nu nrdm]);
 for u = 1:nu
     % find the dissimilarities that belong to this unique combination of
     % dissimilarities
-    disind = all(bsxfun(@eq,regulariser,ureg(u,:)),2);
+    % (this is a bit ugly but checking for equality with NaNs is tricky)
+    disind = arrayfun(@(x)isequaln(regulariser(x,:),ureg(u,:)),...
+        [1:size(regulariser,1)]');
     for r = 1:nrdm
         udis(u,r) = mean(rdms(disind,r));
         regrdms(disind,r) = udis(u,r);
