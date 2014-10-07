@@ -1,4 +1,4 @@
-% return true if the entered matrix is square, has 0 diagonals and is
+% return true if the entered matrix is square, has 0 or 1 diagonals and is
 % symmetric.
 % yes = isrdm(rdm)
 function yes = isrdm(rdm)
