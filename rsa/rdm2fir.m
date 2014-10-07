@@ -1,5 +1,18 @@
-% [firdm,outnames] = rdm2fir(rdm)
-function [firdm,outnames] = rdm2fir(rdm)
+% split the input rdm to one output firdm per unique value in the input.
+% Numformat determines how we name the output rdms. By default output RDMs
+% are scored using 1 where the unique value was in the input and 0
+% elsewhere. If keepvalues is true we instead plug in the actual
+% dissimilarity.
+% [firdm,outnames] = rdm2fir(rdm,[numformat='%02.0f'],[keepvalues=0])
+function [firdm,outnames] = rdm2fir(rdm,numformat,keepvalues)
+
+if ieNotDefined('numformat')
+    numformat = '%02.0f';
+end
+
+if ieNotDefined('keepvalues')
+    keepvalues = 0;
+end
 
 name = 'firdm';
 wasstruct = false;
@@ -17,10 +30,16 @@ u = unique(rdvec);
 u(isnan(u)) = [];
 nfir = numel(u);
 
+outvals = ones(nfir,1);
+if keepvalues == 1
+    % use the actual dissimilarities instead.
+    outvals = u;
+end
+
 for f = 1:nfir
     newvec = zeros([ndis 1],class(rdvec));
-    newvec(rdvec==u(f)) = 1;
-    firdm(f) = struct('name',sprintf('%s_f%02.0f',name,u(f)),...
+    newvec(rdvec==u(f)) = outvals(f);
+    firdm(f) = struct('name',sprintf(['%s_' numformat],name,u(f)),...
         'RDM',vec2rdm(newvec));
 end
 
