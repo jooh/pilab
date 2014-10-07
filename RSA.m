@@ -57,10 +57,38 @@ classdef RSA < GLM
             end
         end
 
+        function tau = kendall_a(self,Yfit)
+        % return kendall's tau alpha between the dissimilarity vector in
+        % Yfit and the mean RDM across the splits in self.data. If Yfit is
+        % undefined we use the mean prediction from all entries in self.
+        %
+        % This method is used mainly as an alternative model fit metric to
+        % rsquare or mserr for cases where we want to test whether the
+        % model gets the rank order of the dissimilarities right.
+        %
+        % tau = kendall_a(self,Yfit)
+            if nargin == 1
+                % self prediction
+                Yfit = predictY(self);
+            end
+            % average the dissimilarities from separate splits
+            % before comparing to the prediction
+            thisdata = matmean(self.data);
+            tau = NaN([1 self(1).nfeatures],class(self(1).data));
+            % as with PluginRSA.fit, this isn't an optimal place for
+            % parfor but analyses of large datasets (e.g. searchlight
+            % volumes) will be too slow if we leave this out.
+            parfor f = 1:self(1).nfeatures
+                tau(1,f) = kendall_a(Yfit(:,f),thisdata(:,f));
+            end
+        end
+
         function cloneargs(self,oldclass)
             % does nothing for base RSA case. (in sub-classes this method
             % is used to insure that subclass properties get set properly
             % during resampling.
+            %
+            % cloneargs(self,oldclass)
         end
 
         function permglm = drawpermsample(self,inds)
@@ -196,6 +224,31 @@ classdef RSA < GLM
             % hit the right column).
             meanpredict = squeeze(nansum(predictbycon,1)) / 2;
             medr2 = median(r2bycon,1);
+        end
+
+        function Yfit = predictY(self,varargin)
+        % generate a fitted (predicted) rdm vector for a design matrix X.
+        %
+        % if no inputs are provided we assume you want a self fit.
+        %
+        % unlike the super-class GLM behaviour where the prediction will
+        % span all the (concatenated) design matrices across runs, here we
+        % generate a prediction for a single run (ie one RDM).
+        %
+        % TODO: a number of other GLM methods need to be similarly
+        % sub-classed here. 
+        %
+        % Yfit = predictY([X])
+            if nargin > 1
+                Xcell = varargin;
+            else
+                Xcell = {self.X};
+            end
+            assert(isequal(Xcell{1},Xcell{:}),['mismatched model RDMs '...
+                'across runs']);
+            % we ignore all subsequent varargin since we assume they
+            % are all the same
+            Yfit = predictY@GLM(self,Xcell{1});
         end
     end
 end
