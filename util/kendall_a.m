@@ -4,6 +4,8 @@
 function taua= kendall_a(a,b)
 
 n=size(a,1);
+assert(n==size(b,1),'mismatched number of rows');
+assert(size(b,2)==1 && size(a,2)==1,'both inputs must be column vectors');
 
 %% compute Kendall rank correlation coefficient tau-a
 K = 0;
