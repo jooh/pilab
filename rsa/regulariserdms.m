@@ -2,7 +2,10 @@
 % dissimilarities.  Finds all unique pairings of the regulariser's
 % dissimilarities and replaces those entries in the datardms with the mean.
 % This usually helps bring out structure in the RDM, but complicates
-% hypothesis testing. 
+% hypothesis testing. As with any averaging, most tests will come out very
+% similarly in terms of statistical significance with and without
+% regularisation. So the main utility of this function is to aid
+% visualisation of noisy RDMs.
 %
 % INPUTS:
 % datardms: some RDM type (struct, vector, matrix)
