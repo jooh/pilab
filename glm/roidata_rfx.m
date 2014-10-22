@@ -7,26 +7,30 @@
 % nboot: 0
 % targetfield: 't'
 % transfun: string that gets feval'ed or a function handle to apply some
-% transform to the data before doing the rfx analysis (e.g. 'atanh' for
-% fisher transform, or something like @(x)x-.5 to mean correct proportion
-% correct classification performance).
+%   transform to the data before doing the rfx analysis (e.g. 'atanh' for
+%   fisher transform, or something like @(x)x-.5 to mean correct proportion
+%   correct classification performance).
 % assumeregister: false (if true, we just stack the single subject results,
 % consequences be damned)
 % varsmoothmask: []
 % varsmoothfwhm: 8 (mm)
 % minn: 2 skip any roi with fewer than this n
 % contrasts: calculate differences between particular conditions. char that
-% gets evaled or struct with fields:
-%   name
-%   conplus
-%   conminus
-%   tail
+%   gets evaled or struct with fields:
+%       name
+%       conplus
+%       conminus
+%       tail
 % customfits: obtain a result by applying some function to the data. char
-% that gets evaled or struct with fields:
-%   name
-%   funhand
-%   cons
-%   tail
+%   that gets fevaled or struct with the following mandatory fields:
+%       name
+%       funhand
+%       cons
+%       tail
+%   the syntax for calling funhand is as follows, so the customfits can
+%   contain custom settings that determine funhand's behavior:
+%       groupres.(targetfield)(end+1,:,:) = customfits(c).funhand(...
+%       groupres.(targetfield)(conind,:,:),customfits(c));
 %
 % [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,[varargin])
 function [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,varargin)
@@ -47,7 +51,6 @@ else
     urois = unique(allrois);
 end
 nroi = length(urois);
-
 
 % but we do assume that contrasts are identical.  we could support
 % this case in theory but let's not for now since it likely
@@ -112,7 +115,7 @@ if ~isempty(customfits)
     end
 end
 
-% add in the contrasts here
+% add in the contrasts
 if ~isempty(contrasts)
     if ischar(contrasts)
         contrasts = feval(contrasts,groupres.rows_contrast);
