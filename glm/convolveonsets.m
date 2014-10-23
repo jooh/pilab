@@ -2,7 +2,9 @@
 % design matrix.
 %
 % INPUTS:
-% onsets: vector with onset times in units TR
+% onsets: vector with onset times in units TR. Note that for consistency
+%   with SPM we use 0-based indexing, so the start of the scan is time 0,
+%   not time 1.
 % conind: vector with regressor indices for each onset time
 % tr: acquisition time in s
 % n: run length in volumes
@@ -10,7 +12,8 @@
 % NAMED, OPTIONAL VARARGIN:
 % hrffun: (spm_hrf) function handle that gets fevaled with a tr as input
 % nbin: (32) number of bins to subdivide TR into (limits precision of onset
-% times)
+%   times). If all onsets are on the volume trigger (ie integers) this can
+%   safely be set to 1 for speed.
 % p: ([]) matrix defining parametric modulators on each onset (default means
 %   no modulation)
 % dur: (0) duration of each response (default means a single bin duration)
@@ -31,7 +34,8 @@ npara = size(p,2);
 % length.
 
 % set up super-sampled design matrix
-nsuper = n*nbin;
+% (we add an extra bin to accommodate very late onsets)
+nsuper = n*nbin+1;
 ureg = unique(conind);
 nreg = length(ureg);
 superx = zeros(nsuper,nreg+npara,class(onsets));
@@ -49,17 +53,17 @@ supertr = tr/nbin;
 hrf = feval(hrffun,supertr);
 hrf = hrf / max(hrf);
 
-% scale up onsets to bin time (and scale up by 1 to since we are using
-% 1-indexing in Matlab (while time is 0-indexed, sort of)
-superons = round(onsets * nbin)+1;
+superons = round(onsets * nbin);
 % track errors in onset times introduced by rounding to nearest bin
-onserr = onsets-(superons/nbin-1);
+onserr = onsets-(superons/nbin);
 
 % plug in each trial's onset in the right column
 for t = 1:ntrials
-    superx(superons(t):superons(t)+superdur(t),conind(t)) = 1;
+    % add an extra bin here to convert 0-based to 1-based indexing
+    ind = 1+[superons(t):superons(t)+superdur(t)];
+    superx(ind,conind(t)) = 1;
     if npara
-        superx(superons(t):superons(t)+superdur(t),nreg+1:end) = p(...
+        superx(ind,nreg+1:end) = p(...
             repmat(t,[superdur(t)+1,1]),:);
     end
 end
@@ -67,8 +71,5 @@ end
 % convolve with HRF
 convx = conv2(superx,hrf);
 
-% downsample to TR (and chop off over-shoot for free)
-inds = floor(linspace(1,nsuper,n));
-X = convx(inds,:);
-
-% 
+% downsample to TR
+X = downsample(convx(1:nsuper-1,:),nbin);
