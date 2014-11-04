@@ -1,17 +1,18 @@
-classdef BaseVolume < handle
-    % vol = Volume(data,varargin)
-    % Base class for data storage.
-    %
-    % This class overloads Matlab's standard concatenation
-    % functionality so it is possible to do e.g. volboth = [vola; volb] to
-    % obtain a sensibly combined MriVolume instance.
-    %
-    % Similarly, direct indexing is overloaded so that e.g.
-    % vol(1,:) returns a volume consisting only of the first data point.
-    %
-    % Optional named input arguments:
-    % metasamples: struct of numeric or cell arrays with nsamples by 1 shape
-    % metafeatures: struct numeric or cell arrays with 1 by nfeatures shape
+% vol = Volume(data,varargin)
+% Base class for data storage.
+%
+% This class overloads Matlab's native concatenation
+% functionality so it is possible to do e.g. volboth = [vola; volb] to
+% obtain a sensibly combined instance.
+%
+% Similarly, direct indexing is overloaded so that e.g.
+% vol(1,:) returns a volume consisting only of the first data point.
+%
+% Optional named input arguments:
+% metasamples: struct of numeric or cell arrays with nsamples by 1 shape
+% metafeatures: struct numeric or cell arrays with 1 by nfeatures shape
+% frameperiod: scalar defining e.g. TR.
+classdef Volume < handle
     properties
         data % nsamples by nfeatures matrix
         nfeatures % number of in-mask voxels (columns in data)
@@ -24,7 +25,7 @@ classdef BaseVolume < handle
     end
 
     methods
-        function vol = BaseVolume(data,varargin)
+        function vol = Volume(data,varargin)
             % empty return for sub-classing
             if nargin==0
                 return
@@ -35,7 +36,7 @@ classdef BaseVolume < handle
             end
             for d = 1:length(data)
                 thisdata = data{d};
-                if isa(thisdata,'BaseVolume')
+                if isa(thisdata,'Volume')
                     datamat = thisdata.data;
                     % update meta
                     vol.appendmetasamples(thisdata.meta.samples);
@@ -254,7 +255,7 @@ classdef BaseVolume < handle
         end
 
         function vol = copy(self,dat,meta)
-            vol = BaseVolume(dat,'metasamples',meta.samples,...
+            vol = Volume(dat,'metasamples',meta.samples,...
                 'metafeatures',meta.features,'frameperiod',self.frameperiod);
         end
 
@@ -265,7 +266,7 @@ classdef BaseVolume < handle
                     % basic parsing
                     [dat,meta] = basesubsref(a,s);
                     % make a new instance
-                    varargout{1} = BaseVolume(dat,'metasamples',meta.samples,...
+                    varargout{1} = Volume(dat,'metasamples',meta.samples,...
                         'metafeatures',meta.features,'frameperiod',a.frameperiod);
                 otherwise
                     % revert to builtin behaviour
@@ -482,7 +483,6 @@ classdef BaseVolume < handle
             trulynew = setdiff(newfields,orgfields)';
             for n = trulynew
                 nstr = n{1};
-                % AAAAAH
                 org.(nstr) = new.(nstr);
             end
         end
