@@ -1,0 +1,181 @@
+classdef MrToolsVolume < MriVolume
+    properties
+        sessiondir % location from which we start a view
+    end
+
+    methods
+        function mrvol = MrToolsVolume(data,mask,varargin)
+            % pull out the arguments we need to extract data
+            [arg,val,remargs] = getArgs(varargin,...
+                {'group=MotionComp','scans=all','header',[]},...
+                'verbose=0','suppressUnknownArgMessage=1');
+            voxsize = [];
+            temp.frameperiod = [];
+            temp.meta = struct('samples',struct,'features',struct);
+            temp.sessiondir = [];
+
+            % parse data input
+            if ieNotDefined('data')
+                data = {};
+            end
+            if ~iscell(data)
+                data = {data};
+            end
+            filenames = {};
+            chunks = [];
+            outdata = [];
+            orgdir = pwd;
+            v = [];
+            for d = 1:length(data)
+                processview = false;
+                openedview = false;
+                thisdata = data{d};
+                datamat = [];
+                if isa(thisdata,'MrToolsVolume')
+                    % concatenation
+                    temp.sessiondir = setifunset(temp.sessiondir,...
+                        thisdata.sessiondir,true);
+                    datamat = thisdata.data;
+                    temp.meta = updatemeta(temp.meta,thisdata.meta);
+                    % also bring along the mask if possible and needed
+                    mask = setifunset(mask,thisdata.mask,true);
+                    header = setifunset(header,thisdata.header);
+                    temp.frameperiod = setifunset(temp.frameperiod,...
+                        thisdata.frameperiod,true);
+                elseif ischar(thisdata)
+                    % path to mrTools session?
+                    temp.sessiondir = setifunset(temp.sessiondir,thisdata);
+                    cd(temp.sessiondir);
+                    v = newView;
+                    processview = true;
+                elseif isview(thisdata)
+                    % open view
+                    v = thisdata;
+                    temp.sessiondir = setifunset(temp.sessiondir,...
+                        viewGet(v,'sessiondirectory'),true);
+                    cd(temp.sessiondir);
+                    processview = true;
+                else
+                    % assume headerless data
+                    datamat = thisdata;
+                end
+                if processview
+                    % let's make a few assumptions to simplify this.
+                    % we will assume that you have only supplied a single
+                    % data input
+                    assert(length(data)==1,['if mrTools view is used ' ...
+                        'only a single input is supported']);
+                    % and that the mask is a char pointing to an ROI in the
+                    % subjects ROI directory (or an already loaded ROI by
+                    % that name)
+                    assert(ischar(mask),['mask input must be non-empty '...
+                        'char for mrTools view input mode']);
+                    maskname = mask;
+                    mask = [];
+
+                    % configure the mrTools session
+                    v = viewSet(v,'currentgroup',group);
+                    groupnum = viewGet(v,'currentgroup');
+                    if strcmp(scans,'all')
+                        scans = 1:viewGet(v,'numscans');
+                    end
+                    nscan = numel(scans);
+                    temp.frameperiod = viewGet(v,'frameperiod');
+                    datamat = [];
+                    % load in one go
+                    roit = loadROITSeries(v,maskname,scans,groupnum,...
+                        'straightXform=1','keepNAN=1');
+                    voxsize = setifunset(voxsize,roit{1}.voxelSize,1);
+                    coords = roit{1}.scanCoords;
+                    dims = viewGet(v,'scandims');
+                    for s = 1:nscan
+                        n = size(roit{s}.tSeries,2);
+                        chunks = [chunks; ones(n,1)*scans(s)];
+                        datamat = [datamat; roit{s}.tSeries'];
+                        % add volume number for spm_vol compatibility
+                        filenames = [filenames; mat2strcell((1:n)',...
+                            [viewGet(v,'tseriespath',scans(s)) ',%d'])];
+                        % check that coordinates are matched across scans
+                        coords = setifunset(coords,roit{s}.scanCoords,1);
+                    end
+                    header = setifunset(header,...
+                        spm_vol(filenames{1}),false);
+                    % drop nans
+                    nanind = any(isnan(datamat),1);
+                    datamat(:,nanind) = [];
+                    coords(:,nanind) = [];
+                    if any(nanind)
+                        logstr('removed %d voxels (%2.0f%% of total)\n',...
+                            sum(nanind),100*sum(nanind) / numel(nanind));
+                    end
+
+                    % setup mask
+                    mask = coord2mat(coords,dims);
+                    % an interesting challenge here is that scanCoords are
+                    % not necessarily in the correct order to successfully
+                    % convert to matrix form via linear indices 
+                    maskind = find(mask)';
+                    [maskx,masky,maskz] = ind2sub(dims,maskind);
+                    maskcoords = [maskx; masky; maskz];
+                    % these coordinates are actually the same as
+                    % scanCoords, just in a different order
+                    assert(isequal(sortrows(maskcoords'),...
+                        sortrows(coords')),'mismatched coordinates');
+                    % so these indices return the columns to the correct
+                    % order
+                    [~,~,resortind] = intersect(maskcoords',coords',...
+                        'rows','stable');
+                    assert(isequal(maskcoords,coords(:,resortind)),...
+                        'resort problem');
+                    datamat = datamat(:,resortind);
+                end
+                % short-circuit if there's no data
+                if isempty(datamat)
+                    continue
+                end
+
+                % initialise with class of first data. Helps conserve
+                % memory if you are using a lower precision datatype
+                % (otherwise the concatenation operation upcasts all data
+                % to double)
+                if isempty(outdata)
+                    outdata = feval(class(datamat),[]);
+                end
+                outdata = [outdata; datamat];
+            end % for d = 1:length(data)
+
+            % if the mask is still undefined this is probably not good
+            if ieNotDefined('mask')
+                error('MrToolsVolume could not find a valid mask');
+            end
+
+            if ~isempty(filenames)
+                temp.meta.samples.filenames = filenames;
+            end
+
+            if ~isempty(chunks)
+                temp.meta.samples.chunks = chunks;
+            end
+
+            % anyway, at the end of all this...
+            args = {'header',header,'voxsize',voxsize};
+            args = [args remargs{:}];
+            if ~isempty([fieldnames(temp.meta.features); fieldnames(temp.meta.samples)])
+                args = [args {'meta',temp.meta}];
+            end
+            mrvol = mrvol@MriVolume(outdata,mask,args{:});
+
+            mrvol.sessiondir = temp.sessiondir;
+            % ensure that if the user specified a custom frameperiod, it
+            % doesn't clash with what mrTools has
+            mrvol.frameperiod = setifunset(mrvol.frameperiod,...
+                temp.frameperiod,true);
+
+            % this is a little destructive but Matlab does not support
+            % a second output argument for constructors, and we don't
+            % really want to store the view in the object instance.
+            deleteView(v);
+            cd(orgdir);
+        end
+    end
+end
