@@ -13,8 +13,8 @@ classdef RankRSA < RSA
             gl = gl@RSA(modelrdms,datardms);
             % then rank trans and Z score so that linear fits become
             % equivalent to Spearman rho
-            gl.X = zscore(tiedrank(gl.X),0,1);
-            gl.data = zscore(tiedrank(gl.data),0,1);
+            gl.X = zscore(ranktrans(gl.X),0,1);
+            gl.data = zscore(ranktrans(gl.data),0,1);
             % finally reduce precision since we are working on ranked data
             % anyway (you'd need a very large number of unique ranks to run
             % into any precision trouble with single floats)
