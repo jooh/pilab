@@ -14,6 +14,7 @@
 % consequences be damned)
 % varsmoothmask: []
 % varsmoothfwhm: 8 (mm)
+% keepnans: (false) preserve nan conditions in outputs
 % minn: 2 skip any roi with fewer than this n
 % contrasts: calculate differences between particular conditions. char that
 %   gets evaled or struct with fields:
@@ -38,7 +39,8 @@ function [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,varargin)
 getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','t','transfun',[],...
     'assumeregister',false,'varsmoothmask',[],'varsmoothfwhm',8,...
     'contrasts',emptystruct('name','conplus','conminus','tail'),...
-    'customfits',emptystruct('name','funhand','cons','tail'),'minn',2});
+    'customfits',emptystruct('name','funhand','cons','tail'),'minn',2,...
+    'keepnans',false});
 
 if assumeregister
     % just take rois from first subject
@@ -144,24 +146,35 @@ end
 
 % remove undersized ROIs
 n = sum(~isnan(groupres.(targetfield)),3);
-% check that sample size is the same for all contrasts by comparing
-% each to the first
-r = bsxfun(@eq,n,n(1,:));
-assert(all(r(:)),...
-    'mismatched sample size across contrasts for a given ROI');
-badroi = n(1,:) < minn;
-logstr('removing %d/%d rois with sample size <%d\n',sum(badroi),nroi,minn);
+% conditions that are all NaN across ROIs
+badcon = all(n==0,2);
 
-% drop those rois
+% for any conditions that are not all NaN, we need the sample size to be
+% matched across conditions
+firstvalidcon = find(~badcon,1,'first');
+r = arrayfun(@(x)all(n(x,:)==n(firstvalidcon,:)),[1:size(n,1)]');
+assert(all(r(~badcon)),...
+    'mismatched sample size across contrasts for a given ROI');
+badroi = n(firstvalidcon,:) < minn;
+if any(badroi)
+    logstr('removing %d/%d rois with sample size <%d\n',sum(badroi),...
+        nroi,minn);
+end
+if any(badcon)
+    logstr('removing %d/%d conditions with no data\n',sum(badcon),ncon);
+end
+
+% drop those rois and cons
 groupres.(targetfield)(:,badroi,:) = [];
+groupres.(targetfield)(badcon,:,:) = [];
 groupres.cols_roi(badroi) = [];
+groupres.rows_contrast(badcon) = [];
+ptails(badcon) = [];
 if isfield(groupres,'nfeatures')
     groupres.nfeatures(:,badroi,:) = [];
 end
 nroi = size(groupres.(targetfield),2);
-
 ncon = numel(groupres.rows_contrast);
-
 groupres.z_subject = {subres.name};
 
 % now we can get the mean struct 
@@ -329,7 +342,36 @@ if nperm > 1 || nboot > 0
     end
 end
 
+if keepnans && any(badcon)
+    logstr('returning nan conditions to output\n');
+    meanres = upcastdata(meanres,~badcon,targetfield);
+    groupres = upcastdata(groupres,~badcon,targetfield);
+end
+
 %% SUBFUNCTIONS
+function meanres = upcastdata(meanres,validind,targetfield);
+
+outsize = size(meanres.(targetfield));
+nvalid = size(validind,1);
+for fn = fieldnames(meanres)'
+    fnstr = fn{1};
+    thissize = size(meanres.(fnstr));
+    if isequal(outsize,thissize)
+        % need to upcast
+        newv = NaN([nvalid outsize(2:end)]);
+        newv(repmat(validind,[1 outsize(2:end)])) = ...
+            meanres.(fnstr);
+        meanres.(fnstr) = newv;
+    elseif outsize(1)==thissize(1) && thissize(2)==1
+        % vector
+        newv = cell(nvalid,1);
+        newv(validind) = meanres.(fnstr);
+        meanres.(fnstr) = newv;
+    else
+        logstr('cannot parse %s, skipping...\n',fnstr);
+    end
+end
+
 function res = fitslope(data,customfit)
 
 [nsamp,nroi,nsub] = size(data);
