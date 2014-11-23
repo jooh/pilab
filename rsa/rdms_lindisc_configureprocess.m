@@ -45,8 +45,8 @@ if isempty(crosscon)
     if crossvalidate
         rdm = GLMProcessor('cvclassificationrun',[],1,'discriminant',...
             testmeth,[np 1],cons);
-        % only necessary if CV
-        glman_rdm = GLMMetaProcessor(glmspec,rdm,@(x)mean(x,3));
+        % NB no longer any need for mean operation here.
+        glman_rdm = GLMMetaProcessor(glmspec,rdm,[]);
     else
         error('currently unsupported');
     end
