@@ -11,6 +11,10 @@
 classdef MeanRSA < RSA
     methods
         function gl = MeanRSA(modelrdms,datardms)
+            if nargin==0
+                modelrdms = [];
+                datardms = [];
+            end
             gl = gl@RSA(modelrdms,datardms);
             % so we need to do some pre-processing to make this work
             for reg = 1:gl.npredictors
