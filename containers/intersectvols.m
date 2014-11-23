@@ -1,6 +1,6 @@
 % insure that a set of volume instances contain the same features. Also
-% removes nans. Supports MriVolumes and other BaseVolume sub-classes with the mask
-% property. If the mask field is not available (e.g., if it's a BaseVolume)
+% removes nans. Supports SPMVolumes and other Volume sub-classes with the mask
+% property. If the mask field is not available (e.g., if it's a Volume)
 % we attempt to intersect by using meta.features.names instead.
 %
 % varargout = intersectvols(varargin)
