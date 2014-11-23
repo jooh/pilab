@@ -1,44 +1,46 @@
 % Convert the data in a SPM.mat (path or loaded mat file) to epivol and
 % designvol instances for further pilab processing.
 %
-% Named, optional inputs (see spm2glmdenoise for descriptions)
+% Named, optional inputs
 % mask
 % ignorelabels
-% assumeconvolved
-% includeextras
 %
 % [epivol,designvol] = spm2vol(SPM,[varargin])
 function [epivol,designvol] = spm2vol(SPM,varargin)
 
-getArgs(varargin,{'mask',[],'ignorelabels',[],'assumeconvolved',[],...
-    'includeextras',[]});
+getArgs(varargin,{'mask',[],'ignorelabels',[]});
 
 if ischar(SPM)
     % assume path to mat file
     SPM = loadbetter(SPM);
 end
 
-header = spm_vol(SPM.xY.P(1,:));
+% construct epivol
+epivol = SPMVolume(SPM,mask);
 
-% this is a bit quirky since we won't glmdenoise but this function
-% does a lot of heavy lifting that we don't want to replicate here
-[epi,models,dur,mask,labels] = spm2glmdenoise(SPM,mask,ignorelabels,...
-    assumeconvolved,includeextras);
-% glmdenoise stores epis with samples in columns and features in
-% rows
-epi = cellfun(@(x)x',epi,'uniformoutput',false);
-% make one matrix
-epi = vertcat(epi{:});
+% construct designvol
+X = SPM.xX.X;
+nrun = numel(SPM.Sess);
+names = arrayfun(@(x)x.name{1},SPM.Sess(1).U,...
+  'uniformoutput',false);
+[names,nameind] = setdiff(names,ignorelabels,'stable');
 
-nchunks = numel(models);
-% set up chunks
-chunks = cell2mat(arrayfun(@(x)ones(size(models{x},1),1)*x,...
-    (1:nchunks)','uniformoutput',false));
+chunks = [];
+for r = 1:nrun
+    % task regressors only
+    colind = SPM.Sess(r).col(1:length(SPM.Sess(r).U));
+    % non-nuisance only
+    colind = colind(nameind);
+    % check that regressor names match across runs
+    runnames = arrayfun(@(x)x.name{1},SPM.Sess(r).U,'uniformoutput',0);
+    assert(isequal(names,runnames(nameind)),['regressor names must be ' ...
+        'identical across runs']);
+    runx{r} = X(SPM.Sess(r).row,colind);
+    chunks = [chunks; ones(SPM.nscan(r),1)*r];
+end
+assert(isequal(chunks,epivol.meta.samples.chunks),['mismatched chunks ' ...
+    'between epivol and designvol']);
 
-% construct volume instances
-epivol = MriVolume(epi,mask,'header',header,...
-    'metasamples',struct('chunks',chunks,'volnames',...
-    {{SPM.xY.VY.fname}'}),'frameperiod',SPM.xY.RT);
-designvol = BaseVolume(vertcat(models{:}),'metafeatures',struct(...
-    'labels',{labels}),'metasamples',struct('chunks',chunks),...
+designvol = Volume(vertcat(runx{:}),'metasamples',...
+    struct('chunks',chunks),'metafeatures',struct('labels',{names}),...
     'frameperiod',SPM.xY.RT);

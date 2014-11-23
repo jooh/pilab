@@ -7,8 +7,8 @@
 % varargout = splitvol(split,varargin)
 function varargout = splitvol(split,varargin)
 
-assert(isa(varargin{1},'BaseVolume'),...
-    'all inputs must be BaseVolume or subclasses thereof');
+assert(isa(varargin{1},'Volume'),...
+    'all inputs must be Volume or subclasses thereof');
 nchunk = varargin{1}.desc.samples.nunique.chunks;
 % configure split
 if isempty(split)
@@ -25,8 +25,8 @@ nsplit = length(usplit);
 % process each volume input
 for n = 1:nargin-1
     thisvol = varargin{n};
-    assert(isa(thisvol,'BaseVolume'),...
-        'all inputs must be BaseVolume or subclasses thereof');
+    assert(isa(thisvol,'Volume'),...
+        'all inputs must be Volume or subclasses thereof');
     assert(thisvol.desc.samples.nunique.chunks==nchunk,...
         'mismatched chunks across vols');
     % apply the split
