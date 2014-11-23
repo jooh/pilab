@@ -4,4 +4,4 @@
 % r = corrpairs(a,b)
 function r = corrpairs(a,b)
 
-r = dot(unitlength(zeromean(a,1),1),unitlength(zeromean(b,1),1));
+r = dot(unitlen(zeromean(a,1)),unitlen(zeromean(b,1)));
