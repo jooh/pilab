@@ -117,6 +117,27 @@ classdef GLM < Saveable
             R = rsquare(Yfit,vertcat(self.data));
         end
 
+        function r = pearson(self,Yfit)
+        % return pearson's r between the predicted data in Yfit and the
+        % actual time series in self.data. If Yfit is undefined we use the
+        % prediction from all entries in self.
+        %
+        % This method is used mainly as an alternative model fit metric to
+        % rsquare or mserr for cases where we want to allow for gain and
+        % offset parameters to vary between prediction and data.
+        %
+        % Note that an important limitation of this approach is that r will
+        % always be positive (since we're comparing _fitted_ values with
+        % data), unless you crossvalidate.
+        %
+        % r = pearson(self,Yfit)
+            if nargin == 1
+                % self prediction
+                Yfit = predictY(self);
+            end
+            r = corrpairs(Yfit,vertcat(self.data));
+        end
+
         function con = contrast(self,conmat)
         % compute a contrast estimate for each contrast vector (rows) in
         % conmat.
@@ -254,7 +275,7 @@ classdef GLM < Saveable
                 outshape,varargin,varargin);
         end
 
-        function cvres = cvcrossclassificationrun(self,trainmeth,testmeth,outshape,trainargs,testargs)
+        function [ms,cvres] = cvcrossclassificationrun(self,trainmeth,testmeth,outshape,trainargs,testargs)
         % crossvalidate the performance of some classifier fit with
         % trainmeth (e.g. discriminant) and some set of parameters (e.g. a
         % contrast vector) and apply testmeth (e.g.  infotmap) with a
@@ -267,7 +288,7 @@ classdef GLM < Saveable
         % trainargs and testargs are cell arrays with any number of extra
         % arguments.         %
         %
-        % cvres = cvcrossclassificationrun(self,trainmeth,testmeth,outshape,[trainargs],[testargs])
+        % [ms,cvres] = cvcrossclassificationrun(self,trainmeth,testmeth,outshape,[trainargs],[testargs])
             if ieNotDefined('trainargs')
                 trainargs = {};
             end
@@ -299,20 +320,20 @@ classdef GLM < Saveable
                 tfit = train.(trainmeth)(trainargs{:});
                 cvres(:,:,s) = test.(testmeth)(tfit,testargs{:});
             end
+            ms = mean(cvres,3);
         end
 
-        function model = drawpermrun(self,runinds)
+        function model = drawpermruns(self,runinds)
         % return a model where the design matrix X has been randomly
         % reassigned to different runs according to runinds. This is a
         % useful way to build a null distribution if
         % a) your runs have identical nsamples 
         % b) your design matrices are independent
         %
-        % model = permuterun(self,runinds)
+        % model = drawpermruns(self,runinds)
             X = {self.X};
-            model = self.copy;
-            nrun = length(self);
-            assert(nrun == numel(runinds),'runinds does not match nrun');
+            model = copy(self);
+            nrun = numel(self);
             for r = 1:length(model)
                 model(r).X = X{runinds(r)};
             end
@@ -370,20 +391,29 @@ classdef GLM < Saveable
         % bootmeth. Additional varargins get passed on to the bootmeth to
         % enable bootstrapping of e.g. particular contrasts.
         %
-        % we draw nboot samples with replacement from the available runs in
-        % self.
-        %
-        % if you leave outshape undefined we hit bootmeth once to figure
-        % out what the desired shape is. This convenience comes at a
-        % performance cost.
+        % INPUTS
+        % self - GLM or subclass
+        % nboot - scalar OR a prepared nboot by nrun matrix (e.g.
+        %   from preparerunboots). This is useful to yoke bootstraps
+        %   across different analyses.
+        % bootmeth - string or cell array defining a set of  valid methods
+        %   for self (one varargout is returned for each).
+        % [outshape] - optional. Save some cycles by pre-defining,
+        %   otherwise we hit bootmeth once to infer it.
+        % [varargin] - any additional varargin are passed on to bootmeth.
         %
         % You can optionally specify multiple bootmeth in cell array form
         % to get yoked bootstrap estimates for multiple methods.
         %
         % varargout = bootstrapruns(self,nboot,bootmeth,[outshape],[varargin])
-            bootinds = bootindices(numel(self),nboot);
             if ieNotDefined('outshape')
                 outshape = {};
+            end
+            if isscalar(nboot)
+                bootinds = preparerunboots(self,nboot);
+            else
+                bootinds = nboot;
+                nboot = size(bootinds,1);
             end
             [varargout,bootmeth] = preallocateperms(self,nboot,bootmeth,outshape,varargin{:});
             % update bootinds in case you asked for more than what's
@@ -408,7 +438,7 @@ classdef GLM < Saveable
         % model = drawpermsample(self,inds)
             assert(numel(inds)==self(1).nsamples,...
                 'got %d inds for %d samples',numel(inds),self(1).nsamples);
-            model = self.copy;
+            model = copy(self);
             for r = 1:length(self)
                 model(r).data = model(r).data(inds,:);
             end
@@ -422,7 +452,7 @@ classdef GLM < Saveable
         % model = drawpermflipsample(self,inds)
             assert(numel(inds)==self(1).nsamples,...
                 'got %d inds for %d samples',numel(inds),self(1).nsamples);
-            model = self.copy;
+            model = copy(self);
             for r = 1:length(self)
                 model(r).data(inds,:) = model(r).data(inds,:) * -1;
             end
@@ -433,6 +463,11 @@ classdef GLM < Saveable
             inds = permuteindices(self(1).nrandsamp,nperms);
         end
 
+        function inds = preparerunperms(self,nperms)
+        % inds = preparerunperms(self,nperms)
+            inds = permuteindices(numel(self),nperms);
+        end
+
         function inds = preparesamplepermflips(self,nperms)
         % inds = preparesamplepermflips(self,nperms)
             inds = permflipindices(self(1).nrandsamp,nperms);
@@ -441,49 +476,69 @@ classdef GLM < Saveable
         function varargout = permutesamples(self,nperms,permmeth,outshape,varargin)
         % generate a null distribution of some permmeth (e.g., fit) by
         % resampling the order of the samples in X without replacement.
-        % Additional varargins are passed on to the permmeth.
         %
-        % If outshape is undefined we infer it. The returned nulldist
-        % is outshape by nperms.
+        % INPUTS:
+        % self - GLM or subclass
+        % nperms - scalar OR a prepared nperm by nsamples matrix (e.g.
+        %   from preparesampleperms). This is useful to yoke permutations
+        %   across different analyses.
+        % permmeth - string or cell array defining a set of  valid methods
+        %   for self (one varargout is returned for each).
+        % [outshape] - optional. Save some cycles by pre-defining,
+        %   otherwise we hit permmeth once to infer it.
+        % [varargin] - any additional varargin are passed on to permmeth.
         %
-        % You can optionally enter a cell array of permmeth, and receive
-        % the same number of output null distributions.
-        %
-        % varargout = permutesamples(self,nperms,permmeth,outshape,[varargin])
+        % varargout = permutesamples(self,nperms,permmeth,[outshape],[varargin])
             if ieNotDefined('outshape')
                 outshape = {};
             end
+            if isscalar(nperms)
+                perminds = preparesampleperms(self,nperms);
+            else
+                perminds = nperms;
+                nperms = size(perminds,1);
+            end
             [varargout,permmeth] = preallocateperms(self,nperms,...
                 permmeth,outshape,varargin{:});
-            perminds = preparesampleperms(self,nperms);
-            for p = 1:size(perminds,1);
-                permd = drawpermsample(self,perminds(p,:));
-                for m = 1:length(varargout)
-                    varargout{m}(:,:,p) = feval(permmeth{m},permd,...
+            for m = 1:length(varargout)
+                temp = varargout{m};
+                parfor p = 1:size(perminds,1);
+                    permd = drawpermsample(self,perminds(p,:));
+                    temp(:,:,p) = feval(permmeth{m},permd,...
                         varargin{:});
                 end
+                varargout{m} = temp;
             end
         end
 
         function varargout = permflipsamples(self,nperms,permmeth,outshape,varargin)
         % generate a null distribution of some permmeth (e.g., fit) by
-        % flipping the sign order of the samples in the data. Additional
-        % varargin get passed to permmeth as input arguments.
+        % flipping the sign of the samples in the data. Note that the same
+        % random resample is applied to the data in each run.
         %
-        % Note that the same random resample is applied to the data in each
-        % run. If outshape is undefined we infer it. The returned nulldist
-        % is outshape by nperms. 
+        % INPUTS:
+        % self - GLM or subclass
+        % nperms - scalar OR a prepared nperm by nsamples matrix (e.g.
+        %   from preparesampleperms). This is useful to yoke permutations
+        %   across different analyses.
+        % permmeth - string or cell array defining a set of  valid methods
+        %   for self (one varargout is returned for each).
+        % [outshape] - optional. Save some cycles by pre-defining,
+        %   otherwise we hit permmeth once to infer it.
+        % [varargin] - any additional varargin are passed on to permmeth.
         %
-        % You can optionally enter a cell array of permmeth, and receive
-        % the same number of output null distributions.
-        %
-        % varargout = permflipsamples(self,nperms,permmeth,outshape,[permmethargs])
+        % varargout = permflipsamples(self,nperms,permmeth,[outshape],[varargin])
             if ieNotDefined('outshape')
                 outshape = {};
             end
+            if isscalar(nperms)
+                perminds = preparesamplepermflips(self,nperms);
+            else
+                perminds = nperms;
+                nperms = size(perminds,1);
+            end
             [varargout,permmeth] = preallocateperms(self,nperms,...
                 permmeth,outshape,varargin{:});
-            perminds = preparesamplepermflips(self,nperms);
             for m = 1:length(varargout)
                 % redundant assigment to keep parfor happy
                 temp = varargout{m};
@@ -494,6 +549,63 @@ classdef GLM < Saveable
                 end
                 varargout{m} = temp;
             end
+        end
+
+        function varargout = permuteruns(self,nperms,permmeth,outshape,varargin)
+        % generate a null distribution of some permmeth (e.g., fit) by
+        % shuffling the assignment of design matrices (X) to runs.
+        % Note that this method assumes that a) you used an independently
+        % randomised trial sequence in each run, b) each run contains the
+        % same number of samples, c) you have already projected out any
+        % covariates that you do not want to include in the null
+        % distribution.
+        %
+        % INPUTS:
+        % self - GLM or subclass
+        % nperms - scalar OR a prepared nperm by nrun matrix (e.g.
+        %   from preparerunperms). This is useful to yoke permutations
+        %   across different analyses.
+        % permmeth - string or cell array defining a set of valid methods
+        %   for self (one varargout is returned for each).
+        % [outshape] - optional. Save some cycles by pre-defining,
+        %   otherwise we hit permmeth once to infer it.
+        % [varargin] - any additional varargin are passed on to permmeth.
+        %
+        % varargout = permuteruns(self,nperms,permmeth,[outshape],[varargin])
+            if ieNotDefined('outshape')
+                outshape = {};
+            end
+            if isscalar(nperms)
+                perminds = preparerunperms(self,nperms);
+            else
+                perminds = nperms;
+                nperms = size(perminds,1);
+            end
+            % preflight checks
+            assert(numel(self) == size(perminds,2),...
+                'runinds does not match nrun');
+            assert(isequal(self(1).nsamples,self.nsamples),...
+                'nsamples must match across runs');
+            [varargout,permmeth] = preallocateperms(self,nperms,...
+                permmeth,outshape,varargin{:});
+            for m = 1:length(varargout)
+                % redundant assigment to keep parfor happy
+                temp = varargout{m};
+                parfor p = 1:size(perminds,1);
+                    permd = drawpermruns(self,perminds(p,:));
+                    temp(:,:,p) = feval(permmeth{m},permd,...
+                        varargin{:});
+                end
+                varargout{m} = temp;
+            end
+        end
+
+        function inds = preparerunboots(self,nboot)
+        % return unique indices for bootstrapping (wraps bootindices
+        % function).
+        %
+        % inds = preparerunboots(self,nboot)
+            inds = bootindices(numel(self),nboot);
         end
 
         function inds = preparesampleboots(self,nboot)
@@ -512,7 +624,7 @@ classdef GLM < Saveable
         % model = drawbootsample(self,inds)
             assert(numel(inds)==self(1).nsamples,...
                 'got %d inds for %d samples',numel(inds),self(1).nsamples);
-            model = self.copy;
+            model = copy(self);
             for r = 1:length(self)
                 model(r).X = model(r).X(inds,:);
                 model(r).data = model(r).data(inds,:);
@@ -522,17 +634,30 @@ classdef GLM < Saveable
         function varargout = bootstrapsamples(self,nboot,bootmeth,outshape,varargin)
         % bootstrap the estimate for some bootmeth (e.g. fit) by drawing
         % samples from the rows of X and data in concert. Note that the
-        % same random draw is made to each run. If outshape is undefined we
+        % same random draw is made in each run. If outshape is undefined we
         % infer it. The returned bootest is outshape by nboot.
         %
-        % You can optionally specify multiple bootmeth in cell array form
-        % to get yoked bootstrap estimates for multiple methods.
+        % INPUTS
+        % self - GLM or subclass
+        % nboot - scalar OR a prepared nboot by nsamples matrix (e.g.
+        %   from preparesampleboots). This is useful to yoke bootstraps
+        %   across different analyses.
+        % bootmeth - string or cell array defining a set of  valid methods
+        %   for self (one varargout is returned for each).
+        % [outshape] - optional. Save some cycles by pre-defining,
+        %   otherwise we hit bootmeth once to infer it.
+        % [varargin] - any additional varargin are passed on to bootmeth.
         %
-        % varargout = bootstrapsamples(self,nboot,bootmeth,outshape)
+        % varargout = bootstrapsamples(self,nboot,bootmeth,[outshape],[varargin])
             if ieNotDefined('outshape')
                 outshape = {};
             end
-            bootinds = self.preparesampleboots(nboot);
+            if isscalar(nboot)
+                bootinds = self.preparesampleboots(nboot);
+            else
+                bootinds = nboot;
+                nboot = size(bootinds,1);
+            end
             % NB, you will get nans at the end of bootest if you ask for
             % more boots than is possible. prctile handles this well.
             [varargout,bootmeth] = preallocateperms(self,nboot,bootmeth,...
@@ -582,14 +707,18 @@ classdef GLM < Saveable
             dataw = vertcat(self.data) * w';
             % make a new GLM instance (NB, we ignore sub-classing here -
             % assume the original self.data has already been appropriately
-            % pre-processed, e.g. as part of constructing a CovGLM)
+            % pre-processed.
             model = GLM(X,dataw);
         end
 
         function [t,model] = infotmap(self,w,conmat)
         % return t estimates for contrasts conmat computed on the
         % infomodel(self,w). The resulting t summarises the strength of the
-        % pattern information effect for each contrast.
+        % pattern information effect for each contrast (ie, the mean
+        % distance from the linear discriminant decision boundary
+        % normalised by the variance of said distance).
+        %
+        % [t,model] = infotmap(self,w,conmat)
             model = infomodel(self,w);
             % diag to get each contrast's estimate on its own discriminant
             % feature.
@@ -601,6 +730,8 @@ classdef GLM < Saveable
         function [pcorrect,model] = classify(self,w,conmat)
         % return the proportion correctly classified samples computed on
         % the infomodel(self,w). 
+        %
+        % [pcorrect,model] = classify(self,w,conmat)
             model = infomodel(self,w);
             % get the predicted contrast timecourse
             correctlabel = vertcat(model.X) * conmat';
@@ -610,8 +741,11 @@ classdef GLM < Saveable
         end
 
         function mahdist = infomahalanobis(self,w,conmat)
-        % return the mahalonobis distance between the points in conmat
-        % computed on the infomodel(self,w).
+        % return the mahalonobis distance (ie, the mean distance from the
+        % linear discriminant decision boundary) between the points in
+        % conmat computed on the infomodel(self,w).
+        %
+        % mahdist = infomahalanobis(self,w,conmat)
             model = infomodel(self,w);
             % we leave out the sqrt transform because negative statistics
             % produce imaginary numbers if you are using a mahalanobis
