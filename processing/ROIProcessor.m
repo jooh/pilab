@@ -59,7 +59,7 @@ classdef ROIProcessor < MetaProcessor
         end % call method
 
         function roivol = result2roivol(self,result,searchvol,metasamples)
-        % Write out a BaseVolume for results, preserving as much meta data
+        % Write out a Volume for results, preserving as much meta data
         % as possible.
         %
         % vol = result2roivol(self,result,[searchvol=false],[metasamples])
@@ -74,16 +74,16 @@ classdef ROIProcessor < MetaProcessor
                 'result does not match self.rois.nsamples');
             % extra ROI properties for meta features
             metafeatures = self.rois.meta.samples;
-            metafeatures.nfeatures = sum(self.rois.data~=0,2)';
+            metafeatures.nfeatures = full(sum(self.rois.data~=0,2)');
             if searchvol
-                % need to update MriVolume mask to only include the
+                % need to update SPMVolume mask to only include the
                 % searchlights.
                 % but pray tell how does one know? I guess this will only
                 % work if nsamples==nfeatures
                 assert(self.rois.nsamples==self.rois.nfeatures,...
                     ['mapping to searchvol only works if ' ...
                     'rois.nsamples==rois.nfeatures']);
-                roivol = MriVolume(result,self.rois,'metafeatures',...
+                roivol = SPMVolume(result,self.rois,'metafeatures',...
                     metafeatures,'metasamples',metasamples);
             else
                 % This is slow so only do this for non-search vols
@@ -99,7 +99,7 @@ classdef ROIProcessor < MetaProcessor
                     metafeatures.com_z(c) = coords(3);
                 end
                 % make a headerless volume 
-                roivol = BaseVolume(result,'metafeatures',...
+                roivol = Volume(result,'metafeatures',...
                     metafeatures,'metasamples',metasamples);
             end
             % drop nan ROIs
