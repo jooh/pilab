@@ -1,13 +1,13 @@
 % wrapper for Searchlight. Calculate all in-mask searchlight for some
-% maskpath and return an MriVolume instance of the mapped searchlight rois.
+% maskpath and return an SPMVolume instance of the mapped searchlight rois.
 % 
 % INPUTS
-% maskpath: brain mask (path to nifti or MriVolume instance)
+% maskpath: brain mask (path to nifti or SPMVolume instance)
 % mapmode: radius or nvox
 % radvox: parameter for mapmode (mm radius or number of voxels)
 %
 % OUTPUTS
-% roivol: MriVolume instance with one row per searchlight and one column
+% roivol: SPMVolume instance with one row per searchlight and one column
 %   per in-mask feature. NB, roivol.data will be sparse to conserve memory.
 % diagnostic: struct with information about each searchlight: its radius
 %   (r), number of voxels (nsphere), and number of searchlights that
@@ -53,4 +53,4 @@ sb(sb~=0) = 1;
 diagnostic.nsphere = full(sum(sb,2)');
 % number of spheres that sampled each voxel
 diagnostic.nsampled = full(sum(sb,1));
-roivol = MriVolume(spheres,sl.vol);
+roivol = SPMVolume(spheres,sl.vol);

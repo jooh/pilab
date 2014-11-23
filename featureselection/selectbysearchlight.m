@@ -59,7 +59,7 @@ switch selectmode
         % keep adding searchlights until we reach the desired total ROI
         % size (err on the size of over-shooting)
         % assign and convert here to speed up the while loop (also avoids
-        % custom subsref overhead in MriVolume)
+        % custom subsref overhead in SPMVolume)
         roidat = full(rois.data~=0);
         while sum(inds)<n
             nspheres = nspheres + 1;
