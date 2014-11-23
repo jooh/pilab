@@ -11,7 +11,7 @@ assert(ndims(vecs)==2,'input must be 2d with pairs in second dim')
 % find the number of conditions given the number of pairs
 n = npairs2n(npairs);
 
-rdms = zeros(n,n,nrdm);
+rdms = zeros([n,n,nrdm],class(vecs));
 % fill in lower triangular vector
 rdms(repmat(tril(true(n),-1),[1 1 nrdm])) = reshape(vecs,[1 npairs*nrdm]);
 % and transpose to add lower triangular vector
