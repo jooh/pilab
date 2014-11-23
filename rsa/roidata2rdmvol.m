@@ -39,7 +39,7 @@ end
 % not run all possible searchlight spheres)
 if rois.nsamples == rois.nfeatures
     % simple case - assume that samples and features are in register
-    disvol = MriVolume(dissimilarities,rois,'metafeatures',struct(...
+    disvol = SPMVolume(dissimilarities,rois,'metafeatures',struct(...
         'names',{rois.meta.samples.names}));
 else
     % complicated case - need to forget the mask and write out a mask-less
@@ -53,7 +53,7 @@ else
         nvox(c) = sum(rois.data(c,:)~=0);
     end
     % make a mask-less volume 
-    disvol = MriVolume(dissimilarities,[],'metafeatures',struct(...
+    disvol = SPMVolume(dissimilarities,[],'metafeatures',struct(...
         'names',{rois.meta.samples.names'},'centreofmass',{coords},...
         'nfeatures',nvox),'header',rois.header);
 end

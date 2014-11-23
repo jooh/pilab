@@ -7,10 +7,10 @@
 % now uses Process-based compute instead.
 %
 % INPUTS:
-% rois: some MriVolume instance with rois in the sample dimension (rows)
-% designvol: some BaseVolume instance (the RDM will have
+% rois: some SPMVolume instance with rois in the sample dimension (rows)
+% designvol: some Volume instance (the RDM will have
 %   designvol.nfeatures entries)
-% epivol: some MriVolume instance (must be in register with rois)
+% epivol: some SPMVolume instance (must be in register with rois)
 %
 % OUTPUTS:
 % disvol: a volume of vectorised RDMs.
@@ -27,7 +27,7 @@
 %   calculated for each unique entry in split and the resulting
 %   session-specific RDMs are averaged.
 % sterrunits: scale by standard error (default true)
-% searchvol: if true, the resulting disvols are MriVolume. For this,
+% searchvol: if true, the resulting disvols are SPMVolume. For this,
 %   rois.nsamples must equal rois.nfeatures and epivol.nfeatures (default
 %   false)
 %
