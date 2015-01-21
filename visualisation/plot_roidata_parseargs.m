@@ -7,7 +7,7 @@ function [m,errs,p,ylab] = plot_roidata_parseargs(res,varargin)
 
 mlabel = [];
 getArgs(varargin,{'mtarget','mean','errtarget',[],'ptarget','ppara',...
-    'mlabel','','errlabel','','pthresh',.05});
+    'mlabel','','errlabel',''},'suppressUnknownArgMessage=1');
 
 % fill in a dummy label if nothing else is specified
 if isempty(mlabel)
@@ -34,8 +34,3 @@ if isempty(ptarget)
 else
     p = res.(ptarget);
 end
-
-if ~isempty(pthresh)
-    p(p>pthresh) = NaN;
-end
-
