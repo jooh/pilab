@@ -260,25 +260,25 @@ classdef GLM < Saveable
             end
         end
 
-        function cvres = cvclassificationrun(self,trainmeth,testmeth,outshape,varargin)
+        function [ms,cvres] = cvclassificationrun(self,trainmeth,testmeth,outshape,varargin)
         % crossvalidate the performance of some classifier fit with
         % trainmeth (e.g. discriminant) and some testmeth (e.g.
-        % infotmap). this method is for cases where you want to do out of
+        % infoc). this method is for cases where you want to do out of
         % sample decoding, ie, predict the columns of the design matrix. If
         % you want to predict the data samples, use cvpredictionrun.
         %
         % methargs is any number of extra arguments. These get passed to
         % both trainmeth and testmeth (e.g., a contrast vector).
         %
-        % cvres = cvclassificationrun(self,trainmeth,testmeth,outshape,[methargs])
-            cvres = cvcrossclassificationrun(self,trainmeth,testmeth,...
+        % [ms,cvres] = cvclassificationrun(self,trainmeth,testmeth,outshape,[methargs])
+            [ms,cvres] = cvcrossclassificationrun(self,trainmeth,testmeth,...
                 outshape,varargin,varargin);
         end
 
         function [ms,cvres] = cvcrossclassificationrun(self,trainmeth,testmeth,outshape,trainargs,testargs)
         % crossvalidate the performance of some classifier fit with
         % trainmeth (e.g. discriminant) and some set of parameters (e.g. a
-        % contrast vector) and apply testmeth (e.g.  infotmap) with a
+        % contrast vector) and apply testmeth (e.g.  infoc) with a
         % second set of parameters (e.g. a different contrast vector). this
         % method is for cases where you want to do out of sample
         % cross-decoding, ie, train on some columns of the design matrix.
@@ -476,6 +476,7 @@ classdef GLM < Saveable
         function varargout = permutesamples(self,nperms,permmeth,outshape,varargin)
         % generate a null distribution of some permmeth (e.g., fit) by
         % resampling the order of the samples in X without replacement.
+        % Note that the same random order is inserted into each row.
         %
         % INPUTS:
         % self - GLM or subclass
@@ -711,14 +712,14 @@ classdef GLM < Saveable
             model = GLM(X,dataw);
         end
 
-        function [t,model] = infotmap(self,w,conmat)
+        function [t,model] = infot(self,w,conmat)
         % return t estimates for contrasts conmat computed on the
         % infomodel(self,w). The resulting t summarises the strength of the
         % pattern information effect for each contrast (ie, the mean
         % distance from the linear discriminant decision boundary
         % normalised by the variance of said distance).
         %
-        % [t,model] = infotmap(self,w,conmat)
+        % [t,model] = infot(self,w,conmat)
             model = infomodel(self,w);
             % diag to get each contrast's estimate on its own discriminant
             % feature.
@@ -740,12 +741,12 @@ classdef GLM < Saveable
             pcorrect = sum(wascorrect,1) / sum([model.nsamples]);
         end
 
-        function mahdist = infomahalanobis(self,w,conmat)
+        function mahdist = infoc(self,w,conmat)
         % return the mahalonobis distance (ie, the mean distance from the
         % linear discriminant decision boundary) between the points in
         % conmat computed on the infomodel(self,w).
         %
-        % mahdist = infomahalanobis(self,w,conmat)
+        % mahdist = infoc(self,w,conmat)
             model = infomodel(self,w);
             % we leave out the sqrt transform because negative statistics
             % produce imaginary numbers if you are using a mahalanobis
