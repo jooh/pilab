@@ -1,8 +1,9 @@
 function glman_rdm = rdms_lindisc_configureprocess(varargin)
 
 getArgs(varargin,{'glmvarargs',{},'cvsplit',[],...
-    'glmclass','GLM','sterrunits',1,'crossvalidate',true,...
-    'crosscon',[],'ncon',[],'setclass','double','demean',false});
+    'glmclass','GLM','sterrunits',0,'crossvalidate',true,...
+    'crosscon',[],'ncon',[],'setclass','double','demean',false,...
+    'nperms',0});
 
 if ~iscell(glmvarargs)
     if isempty(glmvarargs)
@@ -27,14 +28,25 @@ elseif iscell(crosscon)
 end
 
 if sterrunits
-    testmeth = 'infotmap';
+    testmeth = 'infot';
 else
-    testmeth = 'infomahalanobis';
+    testmeth = 'infoc';
 end
+logstr('testmeth: %s\n',testmeth);
 
 % assemble processors
 glmspec = GLMConstructor(glmclass,cvsplit,glmvarargs{:});
 
+
+if nperms > 2
+    assert(~isempty(cvsplit),['cvsplit must be defined for ' ...
+        'permutation test']);
+    % bit hacky but there's no telling how many runs we will have
+    % at this stage.
+    % Note that this solution isn't exactly bullet proof.
+    nrun = numel(cvsplit);
+    pind = permuteindices(nrun,nperms);
+end
 
 if isempty(crosscon)
     % straight RDM
@@ -43,8 +55,13 @@ if isempty(crosscon)
     cons = allpairwisecontrasts(feval(setclass,...
         ncon));
     if crossvalidate
-        rdm = GLMProcessor('cvclassificationrun',[],1,'discriminant',...
-            testmeth,[np 1],cons);
+        cvmeth = 'cvclassificationrun';
+        args = {'discriminant',testmeth,[np 1],cons};
+        if nperms < 2
+            rdm = GLMProcessor(cvmeth,[],1,args{:});
+        else
+            rdm = GLMProcessor('permuteruns',[],1,pind,cvmeth,[],args{:});
+        end
         % NB no longer any need for mean operation here.
         glman_rdm = GLMMetaProcessor(glmspec,rdm,[]);
     else
@@ -64,12 +81,21 @@ else
     crossconout{1}(:,crosscon{1}) = cons;
     crossconout{2} = fullmat;
     crossconout{2}(:,crosscon{2}) = cons;
-    % then processors
-    rdmcross(1) = GLMProcessor('cvcrossclassificationrun',[],1,...
-        'discriminant',testmeth,[np 1],crossconout{1},crossconout{2});
-    rdmcross(2) = GLMProcessor('cvcrossclassificationrun',[],1,...
-        'discriminant',testmeth,[np 1],crossconout{2},crossconout{1});
-    glman_rdm = GLMMetaProcessor(glmspec,rdmcross,@(x)mean(x,3));
+    cvmeth = 'cvcrossclassificationrun';
+    basearg = {[],1};
+    arga = {'discriminant',testmeth,[np 1],crossconout{1},crossconout{2}};
+    argb = {'discriminant',testmeth,[np 1],crossconout{2},crossconout{1}};
+    if nperms < 2
+        rdmcross(1) = GLMProcessor(cvmeth,basearg{:},arga{:});
+        rdmcross(2) = GLMProcessor(cvmeth,basearg{:},argb{:});
+    else
+        rdmcross(1) = GLMProcessor('permuteruns',basearg{:},pind,...
+            cvmeth,[],arga{:});
+        rdmcross(2) = GLMProcessor('permuteruns',basearg{:},pind,...
+            cvmeth,[],argb{:});
+    end
+    % still necessary? A little bit unsure about this.
+    glman_rdm = GLMMetaProcessor(glmspec,rdmcross,[]);
 end
 
 if demean

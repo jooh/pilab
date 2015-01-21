@@ -17,6 +17,9 @@
 % splitdisvolcell: one disvol for each unique entry in split. Note that
 %    compute is faster if you omit this output so only specify 2 nargout if
 %    you really want to use this output.
+% permres: a matrix of permuted results stacked in third dim (true perm is
+%   first entry)
+% sesspermres: cell array with permuted results for each session split.
 %
 % NAMED VARARGIN:
 % glmclass: char defining GLM class (default GLM)
@@ -26,25 +29,32 @@
 % split: indices to define session-specific RDM compute. One RDM is
 %   calculated for each unique entry in split and the resulting
 %   session-specific RDMs are averaged.
-% sterrunits: scale by standard error (default true)
+% sterrunits: scale by standard error (default false)
 % searchvol: if true, the resulting disvols are SPMVolume. For this,
 %   rois.nsamples must equal rois.nfeatures and epivol.nfeatures (default
 %   false)
+% nperms: number of permutations to use for permuteruns (default 0)
 %
-% [disvol,splitdisvolcell] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
-function [disvol,splitdisvolcell] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
+% [disvol,splitdisvolcell,permres,sesspermres] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
+function [disvol,splitdisvolcell,permres,sesspermres] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
 
 getArgs(varargin,{'split',[],'glmvarargs',{},'cvsplit',[],...
-    'glmclass','GLM','sterrunits',1,'crossvalidate',1,...
+    'glmclass','GLM','sterrunits',0,'crossvalidate',1,...
     'minvoxeln',1,'searchvol',false,'crosscon',[],'minn',0,...
-    'demean',false});
+    'demean',false,'nperms',0});
 
 % construct the RDM analysis
+if isempty(cvsplit)
+    cvsplit = 1:epivol.desc.samples.nunique.chunks;
+    assert(isempty(split),'cvsplit must be provided if split is defined');
+end
+
 glman_rdm = rdms_lindisc_configureprocess('glmclass',glmclass,...
     'glmvarargs',...
     glmvarargs,'cvsplit',cvsplit,'sterrunits',sterrunits,...
     'crossvalidate',crossvalidate,'crosscon',crosscon,'ncon',...
-    designvol.nfeatures,'setclass',class(epivol.data),'demean',demean);
+    designvol.nfeatures,'setclass',class(epivol.data),'demean',demean,...
+    'nperms',nperms);
 
 assert(isequal(epivol.xyz,rois.xyz),...
     'mismatched roi/epivol');
@@ -52,12 +62,17 @@ assert(isequal(epivol.meta.samples.chunks,...
     designvol.meta.samples.chunks),...
     'mismatched epivol/designvol');
 
-if ~matlabpool('size')
+% serial ROI iteration if no matlabpool OR if we are running a permutation
+% test (since this already uses parfor).
+% you'd think this would make very little difference the speedup is about
+% 3.5x compared to running permutation tests with this setting still in
+% runrois_spmd and letting Matlab sort out the parallelisation.
+if ~matlabpool('size') || nperms > 1
     runfun = 'runrois_serial';
 else
     runfun = 'runrois_spmd';
 end
-
+logstr('running ROIProcessing with %s\n',runfun);
 
 if isempty(split)
     split = ones(epivol.desc.samples.nunique.chunks,1);
@@ -67,37 +82,42 @@ if nargout>1
     % split the data into appropriately pre-processed cell arrays
     [designcell,epicell] = splitvol(split,designvol,epivol);
     nsplit = length(designcell);
-    splitcell = cell(nsplit,1);
+    sesspermres = cell(nsplit,1);
     % track NaN features - may appear in different runs if nan masking
-    nanmask = false([nsplit rois.nsamples]);
+    nanmask = cell(nsplit,1);
     sl = ROIProcessor(rois,glman_rdm,minn,runfun);
     for sp = 1:nsplit
-        fprintf('running rois for split %d of %d... ',sp,nsplit);
+        logstr('running rois for split %d of %d... ',sp,nsplit);
         tstart = clock;
-        splitcell{sp} = call(sl,designcell{sp}.data,epicell{sp}.data,...
+        sesspermres{sp} = call(sl,designcell{sp}.data,epicell{sp}.data,...
             epicell{sp}.meta.samples.chunks);
-        fprintf('finished in %.3fs\n',etime(clock,tstart));
+        logstr('finished in %s\n',seconds2str(etime(clock,tstart)));
         % track NaN features across splits may appear in different runs if
         % nan masking - nans should only really happen here if you enter
         % empty ROIs
-        nanmask(sp,:) = any(isnan(splitcell{sp}),1);
+        nanmask{sp} = any(isnan(sesspermres{sp}),1);
     end % sp = 1:nsplit
-    meanresult = matmean(splitcell{:});
+    permres = matmean(sesspermres{:});
+    nanmask = cat(1,nanmask{:});
     % remove any nan features from all sessdisvols
-    anynan = any(nanmask,1);
+    anynan = any(nanmask,3);
+    anynan = any(anynan,1);
     % make sure nans are consistent across sessions
-    meanresult(:,anynan) = NaN;
+    permres(:,anynan,:) = NaN;
 else
     % can just build everything into one processor. This tends to be faster
     % because it puts more processing inside each parfor job.
     glman_rdm_split = SessionProcessor(split,glman_rdm);
     sl = ROIProcessor(rois,glman_rdm_split,minn,runfun);
-    fprintf('running all rois... ')
+    logstr('running all rois... ')
     tstart = clock;
-    meanresult = call(sl,designvol.data,epivol.data,...
+    permres = call(sl,designvol.data,epivol.data,...
         epivol.meta.samples.chunks);
-    fprintf('finished in %.3fs\n',etime(clock,tstart));
+    logstr('finished in %s\n',seconds2str(etime(clock,tstart)));
 end
+
+% deal with permutation test
+meanresult = permres(:,:,1);
 
 % create output volume(s)
 disvol = result2roivol(sl,meanresult,searchvol);
@@ -105,7 +125,8 @@ disvol = result2roivol(sl,meanresult,searchvol);
 if nargout>1
     for sp = 1:nsplit
         % make sure nans are consistent
-        splitdisvolcell{sp}(:,anynan) = NaN;
-        splitdisvolcell{sp} = result2roivol(sl,splitcell{sp},searchvol);
+        sesspermres{sp}(:,anynan,:) = NaN;
+        splitdisvolcell{sp} = result2roivol(sl,sesspermres{sp}(:,:,1),...
+            searchvol);
     end
 end
