@@ -1,14 +1,14 @@
-% MetaProcessor subclass. Iterate over samples in some rois to generate a
-% result matrix. Each ROI dataset gets passed to the processor instance
-% using call(analysis,design,data,chunks). Note that this input pattern
-% places some constraints on what type of Processor instances can be
-% supported (most likely a GLMMetaProcessor).
+% MetaProcessor subclass. Iterate over samples in some rois (instance of
+% MriVolume or subclass) to generate results. Each ROI dataset gets passed
+% to the processor instance using call(analysis,design,data,chunks). Note
+% that this input pattern places some constraints on what type of Processor
+% instances can be supported (most likely a GLMMetaProcessor).
 %
 % construction:
 % vl = ROIProcessor(rois,processor,[minn=0],[runfun='runrois_serial'])
 %
-% call
-% result = call(self,designvol,epivol)
+% call:
+% varargout = call(self,designmat,epimat,chunks)
 classdef ROIProcessor < MetaProcessor
     properties
         rois
