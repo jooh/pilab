@@ -38,8 +38,14 @@ classdef MriVolume < Volume
             % instance from Base class
             mrivol = mrivol@Volume(data,varargin{:});
             % then any non-base class inputs
-            getArgs(varargin,{'header',[],'voxsize',[1 1 1]},'verbose=0',...
+            getArgs(varargin,{'header',[],'voxsize',[]},'verbose=0',...
                 'suppressUnknownArgMessage=1');
+            if isa(mask,'MriVolume')
+                % interesting!
+                header = setifunset(header,mask.header,true);
+                voxsize = setifunset(mask.voxsize,true);
+                mask = mask.mask;
+            end
             [mrivol.header,mrivol.voxsize,mrivol.mask] = deal(header,...
                 voxsize,mask);
             % transpose because find returns a column vector and we want

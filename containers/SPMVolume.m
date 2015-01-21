@@ -20,14 +20,14 @@ classdef SPMVolume < MriVolume
                 % assume it's a SPM-compatible volume
                 header = setifunset(header,spm_vol(mask),true);
                 mask = spm_read_vols(header) ~= 0;
-            elseif isa(mask,'SPMVolume')
+            elseif isa(mask,'MriVolume')
                 % interesting!
                 % but here we need to be careful not to include data
                 header = setifunset(header,mask.header,true);
                 voxsize = mask.voxsize;
                 mask = mask.mask;
             elseif ~isempty(mask)
-                mask = mask > 0;
+                mask = mask ~= 0;
             end
 
             % parse data input
