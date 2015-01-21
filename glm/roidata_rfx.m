@@ -5,7 +5,7 @@
 % Named inputs:
 % nperm: 1 
 % nboot: 0
-% targetfield: 't'
+% targetfield: 'r'
 % transfun: string that gets feval'ed or a function handle to apply some
 %   transform to the data before doing the rfx analysis (e.g. 'atanh' for
 %   fisher transform, or something like @(x)x-.5 to mean correct proportion
@@ -36,11 +36,11 @@
 % [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,[varargin])
 function [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,varargin)
     
-getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','t','transfun',[],...
+getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','r','transfun',[],...
     'assumeregister',false,'varsmoothmask',[],'varsmoothfwhm',8,...
     'contrasts',emptystruct('name','conplus','conminus','tail'),...
     'customfits',emptystruct('name','funhand','cons','tail'),'minn',2,...
-    'keepnans',false});
+    'keepnans',false,'subnull',[],'subboot',[]});
 
 if assumeregister
     % just take rois from first subject
@@ -65,12 +65,17 @@ ncon = length(concell);
 nsub = length(subres);
 dat = NaN([ncon nroi nsub]);
 groupres = struct('rows_contrast',{subres(1).rows_contrast},...
-    'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]));
+    'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]),...
+    'tail',{subres(1).tail});
 
 % populate the groupres struct
+targets = intersect(fieldnames(subres),...
+    {targetfield,'pperm','ppara','medianboot','medianste',...
+    'nfeatures','tail'});
 if assumeregister
     % hey, this is easy
-    groupres.(targetfield) = cat(3,subres.(targetfield));
+    % actually I think we can do
+    groupres = collapsestruct(subres,@zcat);
     assert(~any(isnan(groupres.(targetfield)(:))),...
         'nans in targetfield not supported in assumeregister mode');
 else
@@ -79,10 +84,15 @@ else
         for r = 1:length(subres(s).cols_roi)
             thisroi = subres(s).cols_roi{r};
             indroi = strcmp(groupres.cols_roi,thisroi);
-            groupres.(targetfield)(:,indroi,s) = ...
-                subres(s).(targetfield)(:,r);
-            if isfield(groupres,'nfeatures')
-                groupres.nfeatures(1,indroi,s) = subres(s).nfeatures(1,r);
+            for t = targets(:)'
+                tstr = t{1};
+                if strcmp(tstr,'tail')
+                    assert(isequal(groupres.tail,subres.tail),...
+                        'mismatched tails across subjects');
+                else
+                    groupres.(tstr)(:,indroi,s) = ...
+                        subres(s).(tstr)(:,r);
+                end
             end
         end
     end
@@ -97,7 +107,7 @@ if ~isempty(transfun)
 end
 assert(isreal(groupres.(targetfield)),'imaginary output!');
 
-ptails = repmat({'right'},[ncon,1]);
+tail = groupres.tail;
 
 % add in custom fits
 if ~isempty(customfits)
@@ -113,7 +123,7 @@ if ~isempty(customfits)
         groupres.(targetfield)(end+1,:,:) = customfits(c).funhand(...
             groupres.(targetfield)(conind,:,:),customfits(c));
         groupres.rows_contrast{end+1} = customfits(c).name;
-        ptails{end+1} = customfits(c).tail;
+        tail{end+1} = customfits(c).tail;
     end
 end
 
@@ -140,7 +150,7 @@ if ~isempty(contrasts)
         end
         groupres.(targetfield)(end+1,:,:) = meanpos-meanneg;
         groupres.rows_contrast{end+1} = contrasts(c).name;
-        ptails{end+1} = contrasts(c).tail;
+        tail{end+1} = contrasts(c).tail;
     end
 end
 
@@ -165,13 +175,19 @@ if any(badcon)
 end
 
 % drop those rois and cons
-groupres.(targetfield)(:,badroi,:) = [];
-groupres.(targetfield)(badcon,:,:) = [];
 groupres.cols_roi(badroi) = [];
 groupres.rows_contrast(badcon) = [];
-ptails(badcon) = [];
-if isfield(groupres,'nfeatures')
-    groupres.nfeatures(:,badroi,:) = [];
+tail(badcon) = [];
+for t = targets(:)'
+    tstr = t{1};
+    % this is needed to deal with tail (n by 1 array)
+    if size(groupres.(tstr),2) > 1
+        groupres.(tstr)(:,badroi,:) = [];
+    end
+    % this is needed to deal with nfeatures (1 by n array)
+    if size(groupres.(tstr),1) > 1
+        groupres.(tstr)(badcon,:,:) = [];
+    end
 end
 nroi = size(groupres.(targetfield),2);
 ncon = numel(groupres.rows_contrast);
@@ -180,7 +196,7 @@ groupres.z_subject = {subres.name};
 % now we can get the mean struct 
 meanres = struct('rows_contrast',{groupres.rows_contrast},...
     'cols_roi',{groupres.cols_roi},'z_subject',{{subres.name}});
-meanres.ptails = ptails;
+meanres.tail = tail;
 meanres.mean = nanmean(groupres.(targetfield),3);
 meanres.n = sum(~isnan(groupres.(targetfield)),3);
 meanres.std = nanstd(groupres.(targetfield),[],3);
@@ -191,11 +207,11 @@ meanres.t = meanres.mean ./ meanres.sterr;
 
 % p values with correct tail
 meanres.ppara = NaN(size(meanres.t));
-tind = strcmp(meanres.ptails,'right');
+tind = strcmp(meanres.tail,'right');
 meanres.ppara(tind,:) = tcdf(-meanres.t(tind,:),meanres.n(tind,:)-1);
-tind = strcmp(meanres.ptails,'left');
+tind = strcmp(meanres.tail,'left');
 meanres.ppara(tind,:) = tcdf(meanres.t(tind,:),meanres.n(tind,:)-1);
-tind = strcmp(meanres.ptails,'both');
+tind = strcmp(meanres.tail,'both');
 % 2 tailed
 meanres.ppara(tind,:) = tcdf(-abs(meanres.t(tind,:)),...
     meanres.n(tind,:)-1) * 2;
@@ -265,7 +281,7 @@ if nperm > 1 || nboot > 0
                         permpfwe_varsmooth(squeeze(tempnull),...
                         squeeze(tempvar),...
                         maskxyz,'fwhm',varsmoothfwhm,'voxsize',...
-                        voxsize,'tail',meanres.ptails{c});
+                        voxsize,'tail',meanres.tail{c});
                 else
                     % use T to avoid max stat being dominated by
                     % high-variance searchlights
@@ -273,9 +289,9 @@ if nperm > 1 || nboot > 0
                         [1 nroi],1);
                 end
                 meanres.pperm(c,:) = permpvalue(tempnull,...
-                    meanres.ptails{c});
+                    meanres.tail{c});
                 meanres.pfweperm(c,:) = permpfwe(squeeze(tempnull)',...
-                    meanres.ptails{c});
+                    meanres.tail{c});
                 if bigvars
                     nulldist.(targetfield)(c,:,:) = tempnull;
                 end
@@ -328,7 +344,7 @@ if nperm > 1 || nboot > 0
         if nperm > 1
             for c = 1:ncon
                 meanres.pperm(c,:) = permpvalue(...
-                    nulldist.(targetfield)(c,:,:),meanres.ptails{c});
+                    nulldist.(targetfield)(c,:,:),meanres.tail{c});
             end
         end
         if nboot > 0
@@ -370,29 +386,4 @@ for fn = fieldnames(meanres)'
     else
         logstr('cannot parse %s, skipping...\n',fnstr);
     end
-end
-
-function res = fitslope(data,customfit)
-
-[nsamp,nroi,nsub] = size(data);
-res = NaN([1 nroi nsub]);
-for r = 1:nroi
-    valid = ~isnan(data(1,r,:));
-    roidata = squeeze(data(:,r,valid));
-    x = [ones(nsamp,1) customfit.x];
-    b = x \ roidata;
-    res(1,r,valid) = b(2,:);
-end
-
-function res = fitrz(data,customfit)
-
-[nsamp,nroi,nsub] = size(data);
-res = NaN([1 nroi nsub]);
-% the slope estimates come out mostly negative. That doesn't make sense.
-for r = 1:nroi
-    valid = ~isnan(data(1,r,:));
-    roidata = squeeze(data(:,r,valid));
-    x = customfit.x(:);
-    % fisher-transformed correlation coefficient
-    res(1,r,valid) = atanh(zscore(x) \ zscore(roidata));
 end
