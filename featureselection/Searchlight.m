@@ -13,7 +13,7 @@ classdef Searchlight < handle
         lastspheren % store the last n necessary to achieve masked nvox
         mapcoords % handle to either mapr or mapn methods
         nvox = []; % number of voxels in actual searchlight (after mask)
-        vol % SPMVolume instance for mask
+        vol % MriVolume or sub-class for mask
         distances % mm distances for spheres with <min(vol.header.dim) radius
         xyz % voxel coordinates (centered on 0) for distances
         rmax % largest possible radius (limited by volume size)
@@ -23,7 +23,11 @@ classdef Searchlight < handle
     methods
         function sl = Searchlight(maskpath,mapmode,radvox)
         % sl = Searchlight(maskpath,mapmode,radvox)
-            sl.vol = SPMVolume([],maskpath);
+            if ischar(maskpath) 
+                sl.vol = SPMVolume([],maskpath);
+            else
+                sl.vol = MriVolume([],maskpath);
+            end
             % decide on how we are going to map
             sl.mapmode = lower(mapmode);
             switch sl.mapmode
