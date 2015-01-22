@@ -733,6 +733,7 @@ classdef GLM < Saveable
         % the infomodel(self,w). 
         %
         % [pcorrect,model] = classify(self,w,conmat)
+            error('this method is currently incorrect');
             model = infomodel(self,w);
             % get the predicted contrast timecourse
             correctlabel = vertcat(model.X) * conmat';
@@ -743,15 +744,22 @@ classdef GLM < Saveable
 
         function mahdist = infoc(self,w,conmat)
         % return the mahalonobis distance (ie, the mean distance from the
-        % linear discriminant decision boundary) between the points in
-        % conmat computed on the infomodel(self,w).
+        % linear discriminant decision boundary) between the contrasts in
+        % conmat computed on the contrast from the test dataset
         %
         % mahdist = infoc(self,w,conmat)
-            model = infomodel(self,w);
+            
+            % we're going to project the contrast estimates from the test
+            % data onto the discriminant weights. Note that this is
+            % equivalent to projecting the time courses onto the weights
+            % and then calculating a contrast on the resulting discriminant
+            % time course (but unlike infot, there's no division by
+            % standard error).
+            c = contrast(self,conmat);
             % we leave out the sqrt transform because negative statistics
             % produce imaginary numbers if you are using a mahalanobis
             % classifier (ie weights from independent data). 
-            mahdist = diag(contrast(model,conmat))';
+            mahdist = diag(c * w');
         end
 
         function d = preallocate(self,shape)
