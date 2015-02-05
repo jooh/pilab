@@ -207,6 +207,9 @@ classdef GLM < Saveable
                 otherwise
                     error('unknown tail: %s',tail)
             end
+            % make sure p does not round to 0 for values beyond current
+            % precision
+            p(p==0) = realmin(class(p));
         end
 
         function [winners,meds] = crossvalidateproperty(self,property,values,metric,selectfun)
@@ -744,8 +747,9 @@ classdef GLM < Saveable
 
         function mahdist = infoc(self,w,conmat)
         % return the mahalonobis distance (ie, the mean distance from the
-        % linear discriminant decision boundary) between the contrasts in
-        % conmat computed on the contrast from the test dataset
+        % linear discriminant decision boundary in standard deviation
+        % units) between the contrasts in conmat computed on the contrast
+        % from the test dataset.
         %
         % mahdist = infoc(self,w,conmat)
             
@@ -756,10 +760,12 @@ classdef GLM < Saveable
             % time course (but unlike infot, there's no division by
             % standard error).
             c = contrast(self,conmat);
-            % we leave out the sqrt transform because negative statistics
+            % we use a signed sqrt transform because negative statistics
             % produce imaginary numbers if you are using a mahalanobis
-            % classifier (ie weights from independent data). 
-            mahdist = diag(c * w');
+            % classifier (ie weights from independent data). Note that in
+            % some cases you may wish to preserve squared values instead
+            % (e.g. for pattern component analysis)
+            mahdist = sqrtsigned(diag(c * w'));
         end
 
         function d = preallocate(self,shape)
