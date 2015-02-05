@@ -210,7 +210,7 @@ if ~isempty(customfits)
             r = cell(1,size(bootdist.r,3));
             for b = 1:size(bootdist.r,3)
                 r{b} = customfits(c).funhand(...
-                    bootdist.r(conind,:,n),customfits(c));
+                    bootdist.r(conind,:,b),customfits(c));
             end
             bootdist.r(end+1,:,:) = cat(3,r{:});
         end
@@ -312,7 +312,6 @@ function res = fitrz(data,customfit)
 
 [nsamp,nroi,nsub] = size(data);
 res = NaN([1 nroi nsub]);
-% the slope estimates come out mostly negative. That doesn't make sense.
 for r = 1:nroi
     valid = ~isnan(data(1,r,:));
     roidata = squeeze(data(:,r,valid));
