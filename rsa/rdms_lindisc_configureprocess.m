@@ -38,7 +38,7 @@ logstr('testmeth: %s\n',testmeth);
 glmspec = GLMConstructor(glmclass,cvsplit,glmvarargs{:});
 
 
-if nperms > 2
+if nperms > 1
     assert(~isempty(cvsplit),['cvsplit must be defined for ' ...
         'permutation test']);
     % bit hacky but there's no telling how many runs we will have
