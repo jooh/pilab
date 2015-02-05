@@ -87,7 +87,7 @@ if nargout>1
     nanmask = cell(nsplit,1);
     sl = ROIProcessor(rois,glman_rdm,minn,runfun);
     for sp = 1:nsplit
-        logstr('running rois for split %d of %d... ',sp,nsplit);
+        logstr('running rois for split %d of %d...\n',sp,nsplit);
         tstart = clock;
         sesspermres{sp} = call(sl,designcell{sp}.data,epicell{sp}.data,...
             epicell{sp}.meta.samples.chunks);
