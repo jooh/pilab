@@ -6,7 +6,7 @@
 % plot_roidata(figdir,res,groupres,predictors,varargin)
 function plot_roidata(figdir,res,groupres,predictors,varargin)
 
-[m,errs,p,ylab] = plot_roidata_parseargs(res,varargin{:});
+[m,errs,p,ylab,groupm,groupp] = plot_roidata_parseargs(res,groupres,varargin{:});
 getArgs(varargin,{'extracongroups',{},'pthresh',.05});
 
 mkdirifneeded(figdir);
@@ -30,9 +30,9 @@ notsigcolor = [.6 .6 .6];
 
 % default to showing all in colour
 singlesig = true([ncon nroi nsub]);
-if isfield(groupres,'pperm') && ~all(isnan(groupres.pperm(:)))
+if ~isempty(groupp)
     % define points to gray out
-    singlesig = groupres.pperm < 0.05;
+    singlesig = groupp < 0.05;
 end
 
 % invisible figure
@@ -130,8 +130,8 @@ for rgroup = 1:numel(roigroups)
                 % set barchart underneath to outlines for clarity
                 set(bh,'facecolor',[1 1 1],'edgecolor',[0 0 0]);
                 % plot all the points in monochrome
-                ph = plotarray(1:numel(thisc.ind),...
-                    groupres.r(thisc.ind,r,:),'.','markersize',12);
+                ph = plotarray(1:numel(thisc.ind),groupm(thisc.ind,r,:),...
+                    '.','markersize',12);
                 % then color according to subcolor
                 for s = 1:nsub
                     if any(isnan(ph(:,:,s)))
@@ -182,7 +182,7 @@ for rgroup = 1:numel(roigroups)
 
                 % plot all the points in monochrome
                 ph = plotarray(repmat([1:numel(thisr.ind)],[1 1 nsub]),...
-                    groupres.r(c,thisr.ind,:),'.','markersize',12);
+                    groupm(c,thisr.ind,:),'.','markersize',12);
                 % then color according to subcolor
                 for s = 1:nsub
                     if any(isnan(ph(:,:,s)))
