@@ -4,4 +4,5 @@
 % r = corrpairs(a,b)
 function r = corrpairs(a,b)
 
-r = dot(unitlen(zeromean(a,1)),unitlen(zeromean(b,1)));
+r = dot(unitlen(bsxfun(@minus,a,mean(a))),unitlen(bsxfun(@minus,b,...
+    mean(b))));
