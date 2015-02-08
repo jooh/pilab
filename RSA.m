@@ -57,6 +57,33 @@ classdef RSA < GLM
             end
         end
 
+        function r = residuals(self,varargin)
+        % residuals of prediction on data. If undefined, we use
+        % self-prediction. Because these are RDMs, we average and obtain a
+        % single residual RDM (see also predictY).
+        %
+        % r = residuals([prediction])
+            if nargin > 1
+                prediction = matmean(varargin{:});
+            else
+                prediction = predictY(self,vertcat(self.X));
+            end
+            r = getdata(self) - prediction;
+        end
+
+        function fullr = residualsfull(self,varargin)
+        % The RSA class always removes NaNs before fitting, so the standard
+        % residuals function may not return a valid rdvec. This function
+        % re-introduces the NaNs to so that conversion to rdmat works
+        % again.
+        %
+        % r = residualsfull(self,varargin)
+            r = residuals(self,varargin{:});
+            fullr = NaN([size(self(1).validvec,1) self(1).nfeatures],...
+                class(r));
+            fullr(repmat(self(1).validvec,[1 self(1).nfeatures])) = r;
+        end
+
         function tau = kendall_a(self,Yfit)
         % return kendall's tau alpha between the dissimilarity vector in
         % Yfit and the mean RDM across the splits in self.data. If Yfit is
@@ -71,9 +98,7 @@ classdef RSA < GLM
                 % self prediction
                 Yfit = predictY(self);
             end
-            % average the dissimilarities from separate splits
-            % before comparing to the prediction
-            thisdata = matmean(self.data);
+            thisdata = getdata(self);
             tau = NaN([1 self(1).nfeatures],class(self(1).data));
             % as with PluginRSA.fit, this isn't an optimal place for
             % parfor but analyses of large datasets (e.g. searchlight
@@ -99,8 +124,7 @@ classdef RSA < GLM
             end
             % average the dissimilarities from separate splits
             % before comparing to the prediction
-            thisdata = matmean(self.data);
-            rho = corrpairs(ranktrans(Yfit),ranktrans(thisdata));
+            rho = corrpairs(ranktrans(Yfit),ranktrans(getdata(self)));
         end
 
         function r = pearson(self,Yfit)
@@ -120,8 +144,7 @@ classdef RSA < GLM
             end
             % average the dissimilarities from separate splits
             % before comparing to the prediction
-            thisdata = matmean(self.data);
-            r = corrpairs(Yfit,thisdata);
+            r = corrpairs(Yfit,getdata(self));
         end
 
         function cloneargs(self,oldclass)
@@ -276,9 +299,6 @@ classdef RSA < GLM
         % span all the (concatenated) design matrices across runs, here we
         % generate a prediction for a single run (ie one RDM).
         %
-        % TODO: a number of other GLM methods need to be similarly
-        % sub-classed here. 
-        %
         % Yfit = predictY([X])
             if nargin > 1
                 Xcell = varargin;
@@ -292,35 +312,6 @@ classdef RSA < GLM
             Yfit = predictY@GLM(self,Xcell{1});
         end
 
-        function r = residuals(self,varargin)
-        % residual dissimilarities from the mean prediction (matmean over
-        % varargin) on the mean data across runs.
-        %
-        % r = residuals(self,varargin)
-            if nargin > 1
-                % ensure prediction is averaged over runs
-                prediction = matmean(varargin{:});
-            else
-                % return (averaged) prediction on self
-                prediction = predictY(self);
-            end
-            % return the residual between mean(self) and mean(prediction).
-            r = matmean(self.data) - prediction;
-        end
-
-        function fullr = residualsfull(self,varargin)
-        % The RSA class always removes NaNs before fitting, so the standard
-        % residuals function may not return a valid rdvec. This function
-        % re-introduces the NaNs to so that conversion to rdmat works
-        % again.
-        %
-        % r = residualsfull(self,varargin)
-            r = residuals(self,varargin{:});
-            fullr = NaN([size(self(1).validvec,1) self(1).nfeatures],...
-                class(r));
-            fullr(repmat(self(1).validvec,[1 self(1).nfeatures])) = r;
-        end
-
         function mr = mrss(self)
         % placeholder sub-class of GLM method - triggers an error since you
         % almost certainly don't want to be calculating this on dependent
@@ -328,7 +319,14 @@ classdef RSA < GLM
         %
         % mr = mrss(self)
             mr = [];
-            error('MRSS is not well defined for dissimilarities');
+            error(['MRSS and other parametric inferential stats are ' ...
+                'not well defined for dissimilarities']);
+        end
+
+        function data = getdata(self)
+        % get data by averaging the RDMs across instances 
+        % data = getdata(self)
+            data = mean(zcat(self.data),3);
         end
     end
 end
