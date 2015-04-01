@@ -163,29 +163,6 @@ classdef GLM < Saveable
             t = contrast(self,conmat) ./ standarderror(self,conmat);
         end
 
-        function f = fmap(self,conmat)
-        % compute f statistic for the contrast vector (or matrix) in
-        % conmat. Uses various SPM8 functions internally (mostly lifted
-        % from spm_ancova)
-        %
-        % f = fmap(self,conmat)
-            est = fit(self);
-            ress2 = sum(residuals(self).^2,1);
-            % this sets up some mysterious structures upon which spm
-            % depends
-            xX = spm_sp('Set',vertcat(self.X));
-            xCon = spm_FcUtil('Set','','F','c',conmat',xX);
-            % good luck unpacking what's going on in the following.
-            % Hsqr - extra sum of squares of est from contrast (numerator
-            % in F test)
-            h = spm_FcUtil('Hsqr',xCon,xX);
-            X1o = spm_FcUtil('X1o',xCon,xX);
-            V = speye(sum([self.nsamples]));
-            [trRV, trRVRV] = spm_SpUtil('trRV',xX,V);
-            [trMV, trMVMV] = spm_SpUtil('trMV',X1o,V);
-            f = sum((h*est).^2,1)./(ress2*trMV/trRV);
-        end
-
         function p = pmap(self,conmat,tail)
         % return p values for each contrast vector (rows) in conmat. Tail
         % can be both (default), left or right.
@@ -597,8 +574,7 @@ classdef GLM < Saveable
                 temp = varargout{m};
                 parfor p = 1:size(perminds,1);
                     permd = drawpermruns(self,perminds(p,:));
-                    temp(:,:,p) = feval(permmeth{m},permd,...
-                        varargin{:});
+                    temp(:,:,p) = feval(permmeth{m},permd,varargin{:});
                 end
                 varargout{m} = temp;
             end
@@ -674,7 +650,11 @@ classdef GLM < Saveable
                 temp = varargout{m};
                 parfor b = 1:nboot
                     bootd = drawbootsample(self,bootinds(b,:));
-                    temp(:,:,b) = feval(bootmeth{m},bootd,varargin{:});
+                    if rank(vertcat(bootd.X)) < bootd(1).npredictors
+                        temp(:,:,b) = NaN;
+                    else
+                        temp(:,:,b) = feval(bootmeth{m},bootd,varargin{:});
+                    end
                 end
                 varargout{m} = temp;
             end
@@ -729,20 +709,6 @@ classdef GLM < Saveable
             cons = diag(contrast(model,conmat));
             errs = diag(standarderror(model,conmat));
             t = cons ./ errs;
-        end
-
-        function [pcorrect,model] = classify(self,w,conmat)
-        % return the proportion correctly classified samples computed on
-        % the infomodel(self,w). 
-        %
-        % [pcorrect,model] = classify(self,w,conmat)
-            error('this method is currently incorrect');
-            model = infomodel(self,w);
-            % get the predicted contrast timecourse
-            correctlabel = vertcat(model.X) * conmat';
-            % compare the sign to the discriminant timecourse
-            wascorrect = vertcat(model.data) .* correctlabel > 0;
-            pcorrect = sum(wascorrect,1) / sum([model.nsamples]);
         end
 
         function mahdist = infoc(self,w,conmat)
