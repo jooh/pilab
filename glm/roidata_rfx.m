@@ -1,6 +1,6 @@
 % do a random effects analysis on the data in struct array subres (one
 % entry per subject). Makes various assumptions about how subres is
-% organised - see roidata_rsa and roidata_lindisc for reference.
+% organised - see roidata_rsa and roidata_glm for reference.
 %
 % Named inputs:
 % nperm: 1 
@@ -16,6 +16,8 @@
 % varsmoothfwhm: 8 (mm)
 % keepnans: (false) preserve nan conditions in outputs
 % minn: 2 skip any roi with fewer than this n
+% multpdim: ('roi') can also be 'con' for FWE/FDR correction over conditions
+%   instead
 % contrasts: calculate differences between particular conditions. char that
 %   gets evaled or struct with fields:
 %       name
@@ -40,7 +42,16 @@ getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','r','transfun',[],...
     'assumeregister',false,'varsmoothmask',[],'varsmoothfwhm',8,...
     'contrasts',emptystruct('name','conplus','conminus','tail'),...
     'customfits',emptystruct('name','funhand','cons','tail'),'minn',2,...
-    'keepnans',false,'subnull',[],'subboot',[]});
+    'keepnans',false,'multpdim','roi'});
+
+% we assume that contrasts are identical.  we could support
+% this case in theory but let's not for now since it likely
+% indicates a user error.
+concell = {subres.rows_contrast};
+assert(isequal(concell{:}),...
+    'different predictors in different subjects');
+concell = concell{1};
+ncon = length(concell);
 
 if assumeregister
     % just take rois from first subject
@@ -53,20 +64,12 @@ else
     urois = unique(allrois);
 end
 nroi = length(urois);
-
-% but we do assume that contrasts are identical.  we could support
-% this case in theory but let's not for now since it likely
-% indicates a user error.
-concell = {subres.rows_contrast};
-assert(isequal(concell{:}),...
-    'different predictors in different subjects');
-concell = concell{1};
-ncon = length(concell);
 nsub = length(subres);
 dat = NaN([ncon nroi nsub]);
 groupres = struct('rows_contrast',{subres(1).rows_contrast},...
     'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]),...
     'tail',{subres(1).tail});
+
 
 % populate the groupres struct
 targets = intersect(fieldnames(subres),...
@@ -74,7 +77,6 @@ targets = intersect(fieldnames(subres),...
     'nfeatures','tail'});
 if assumeregister
     % hey, this is easy
-    % actually I think we can do
     groupres = collapsestruct(subres,@zcat);
     assert(~any(isnan(groupres.(targetfield)(:))),...
         'nans in targetfield not supported in assumeregister mode');
@@ -94,6 +96,27 @@ else
                         subres(s).(tstr)(:,r);
                 end
             end
+        end
+    end
+end
+
+if isfield(subres,'custom')
+    ncustom = numel(subres(1).custom);
+    groupres.custom = cell(size(subres(1).custom));
+    for s = 1:nsub
+        assert(isequal(ncustom,numel(subres(s).custom)),...
+            'mismatched numel(custom) across subjects');
+        % work out the ROI indices for this subject
+        [~,ginds,sinds] = intersect(groupres.cols_roi,subres(s).cols_roi,...
+            'stable');
+        for c = 1:ncustom
+            assert(ismatrix(subres(s).custom{c}),['>2d custom fields '...
+                'are not supported']);
+            groupres.custom{c} = zcat(groupres.custom{c},...
+                NaN([size(subres(s).custom{c},1),nroi]));
+            % so we make no assumptions about the shape of custom here except
+            % that ROIs are in second dim
+            groupres.custom{c}(:,ginds,end) = subres(s).custom{c}(:,sinds);
         end
     end
 end
@@ -158,6 +181,7 @@ end
 n = sum(~isnan(groupres.(targetfield)),3);
 % conditions that are all NaN across ROIs
 badcon = all(n==0,2);
+assert(~all(badcon),'no valid data in targetfield:%s',targetfield);
 
 % for any conditions that are not all NaN, we need the sample size to be
 % matched across conditions
@@ -187,6 +211,11 @@ for t = targets(:)'
     % this is needed to deal with nfeatures (1 by n array)
     if size(groupres.(tstr),1) > 1
         groupres.(tstr)(badcon,:,:) = [];
+    end
+end
+if isfield(groupres,'custom')
+    for c = 1:ncustom
+        groupres.custom{c} = indexdim(groupres.custom{c},~badroi,2);
     end
 end
 nroi = size(groupres.(targetfield),2);
@@ -221,6 +250,28 @@ if isfield(groupres,'nfeatures')
     meanres.nfeatures_std = nanstd(groupres.nfeatures,[],3);
 end
 
+switch multpdim
+    case 'roi'
+        % iterate over cons, correct over all ROIs
+        fwedim = 1;
+        fwelim = ncon;
+        tail = meanres.tail;
+        threshshape = [ncon 1];
+    case 'con'
+        % iverate over ROIs, correct over all cons
+        fwedim = 2;
+        fwelim = nroi;
+        % this mode is useful for e.g. RDM multiple comparisons correction,
+        % but it does come with a few caveat.
+        assert(isequal(meanres.tail{1},meanres.tail{:}),...
+            'all cons must have the same tail if multpdim=roi');
+        assert(~assumeregister,['multpdim=roi and assumeregister ' ...
+            'cannot be combined']);
+        threshshape = [1 nroi];
+    otherwise
+        error('unknown multpdim: %s',multpdim);
+end
+
 varsmooth = false;
 if ~isempty(varsmoothmask)
     varsmooth = true;
@@ -235,6 +286,7 @@ end
 
 meanres.pperm = NaN(size(meanres.t));
 meanres.pfweperm = NaN(size(meanres.t));
+meanres.pfdrthresh = NaN(threshshape);
 meanres.medianboot = NaN(size(meanres.t));
 meanres.medianste = NaN(size(meanres.t));
 
@@ -290,12 +342,13 @@ if nperm > 1 || nboot > 0
                 end
                 meanres.pperm(c,:) = permpvalue(tempnull,...
                     meanres.tail{c});
-                meanres.pfweperm(c,:) = permpfwe(squeeze(tempnull)',...
+                meanres.pfweperm(c,:) = permpfwe(squeeze(tempnull),...
                     meanres.tail{c});
                 if bigvars
                     nulldist.(targetfield)(c,:,:) = tempnull;
                 end
             end
+            meanres.pfdrthresh(c) = FDRthreshold(meanres.ppara(c,:));
 
             % bootstrap
             if nboot > 0
@@ -329,8 +382,10 @@ if nperm > 1 || nboot > 0
 
             % permutation test
             if nperm > 1
+                % nb permute T, not raw estimates, to avoid issues with
+                % variance inhomogeneities across roi/con.
                 nulldist.(targetfield)(:,r,:) = permflipsamples(model,...
-                    nperm,'fit',[1 ncon]);
+                    nperm,'tmap',[1 ncon],1);
             end
 
             % bootstrap
@@ -339,12 +394,30 @@ if nperm > 1 || nboot > 0
                     nboot,'fit',[1 ncon]);
             end
         end
-        % nb, when ~assumeregister we basically assume bigvars will be ok
-        % (typically this is an ROI analysis with manageable data size)
-        if nperm > 1
-            for c = 1:ncon
-                meanres.pperm(c,:) = permpvalue(...
-                    nulldist.(targetfield)(c,:,:),meanres.tail{c});
+        for c = 1:fwelim
+            % get the current ROI or condition depending on multpdim
+            outind = dimindices(size(meanres.t),c,fwedim);
+            if nperm > 1
+                innull = indexdim(nulldist.(targetfield),c,fwedim);
+                meanres.pperm(outind) = permpvalue(innull,tail{c});
+                % unlike pperm, pfweperm needs matrix input
+                if ~ismatrix(innull)
+                    innull = squeeze(innull);
+                end
+                meanres.pfweperm(outind) = permpfwe(innull,...
+                    tail{c});
+            end
+            % don't need tail here because the ppara field is already
+            % tailed
+            try
+                meanres.pfdrthresh(c) = FDRthreshold(indexdim(...
+                    meanres.ppara,c,fwedim));
+            catch
+                err = lasterror;
+                if ~strcmp(err.identifier,'MATLAB:badsubscript')
+                    rethrow(err);
+                end
+                warning('FDR estimation failed - not adequate p distro?');
             end
         end
         if nboot > 0
@@ -365,7 +438,7 @@ if keepnans && any(badcon)
 end
 
 %% SUBFUNCTIONS
-function meanres = upcastdata(meanres,validind,targetfield);
+function meanres = upcastdata(meanres,validind,targetfield)
 
 outsize = size(meanres.(targetfield));
 nvalid = size(validind,1);
