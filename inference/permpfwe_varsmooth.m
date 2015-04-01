@@ -32,11 +32,11 @@ else
 end
 
 % smooth the variance estimate
-smoothvar = smoothdatavecs(permvar',fwhm,mask,voxsize);
+smoothvar = smoothdatavecs(permvar',fwhm,mask,voxsize)';
 
 % get the pseudo T - null effect estimate / smoothed variance estimate
-pseudotdist = permest' ./ smoothvar;
+pseudotdist = permest ./ smoothvar;
 
 % max stat p value as usual
 p = permpfwe(pseudotdist,tail);
-pseudot = pseudotdist(1,:);
+pseudot = pseudotdist(:,1);

@@ -1,6 +1,7 @@
 % return the p values for a permutation distribution (with permutations in
 % the final dimension). We assume that the first entry is the true sample.
 % tail is 'right' (default), 'left' or 'both' for 2-tailed inference.
+% Supports any input dimensionality.
 %
 % p = permpvalue(permdist,tail)
 function p = permpvalue(permdist,tail)
@@ -12,17 +13,8 @@ end
 permdim = ndims(permdist);
 datadims = size(permdist);
 
-% there must be a more general way
-switch permdim
-    case 2
-        truerep = repmat(permdist(:,1),[1 datadims(permdim)]);
-    case 3
-        truerep = repmat(permdist(:,:,1),[1 1 datadims(permdim)]);
-    case 4
-        truerep = repmat(permdist(:,:,:,1),[1 1 1 datadims(permdim)]);
-    otherwise
-        error('no permpvalue support for %d inputs',permdim);
-end
+truerep = indexdim(permdist,1,permdim);
+truerep = repmat(truerep,[ones(1,permdim-1) datadims(permdim)]);
 
 switch tail
     case 'right'
@@ -33,6 +25,9 @@ switch tail
         % two-tailed - absolute value (ie pos or neg) exceeding the
         % absolute nulls
         ngreater = sum(abs(permdist) >= abs(truerep),permdim);
+    case 'none'
+        p = NaN(datadims(1:end-1));
+        return;
     otherwise
         error('unknown tail: %s',tail);
 end
