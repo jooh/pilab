@@ -57,6 +57,8 @@ superons = round(onsets * nbin);
 % track errors in onset times introduced by rounding to nearest bin
 onserr = onsets-(superons/nbin);
 
+assert(numel(onsets)==numel(conind),'onsets and conind must be equal size');
+
 % plug in each trial's onset in the right column
 for t = 1:ntrials
     % add an extra bin here to convert 0-based to 1-based indexing
