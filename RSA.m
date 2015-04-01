@@ -319,8 +319,9 @@ classdef RSA < GLM
         %
         % mr = mrss(self)
             mr = [];
-            error(['MRSS and other parametric inferential stats are ' ...
-                'not well defined for dissimilarities']);
+            error('RSA:noParametricStats',['MRSS and other parametric ' ...
+                'inferential stats are not well defined for ' ...
+                'RSA since dissimilarities are dependent']);
         end
 
         function data = getdata(self)
