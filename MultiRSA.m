@@ -15,11 +15,6 @@ classdef MultiRSA < RSA
             gl.data = sqsigned(gl.data);
         end
 
-        function estimates = fit(self)
-            % fit the squared model, then root it back to data units
-            estimates = sqrtsigned(fit@RSA(self));
-        end
-
         function cmat = covmat(self)
             % covariance in squared model, then back to data units
             cmat = sqrtsigned(covmat@RSA(self));
@@ -31,6 +26,10 @@ classdef MultiRSA < RSA
         %
         % Yfit = predictY([X])
             Yfit = sqrtsigned(predictY@RSA(self,varargin{:}));
+        end
+
+        function con = contrast(self,conmat)
+            con = sqrtsigned(contrast@RSA(self,conmat));
         end
 
         function data = getdata(self)
