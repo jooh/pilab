@@ -213,7 +213,7 @@ classdef GLM < Saveable
                 % set property in train and test
                 [self.(property)] = deal(values(v));
                 % cross-validate fit with chosen property
-                meds(v,:) = cvpredictionrun(self,'predictY','rsquare',...
+                meds(v,:) = cvpredictionrun(self,'predictY',metric,...
                     [1 self(1).nfeatures]);
             end
             % find winning value for each feature
