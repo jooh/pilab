@@ -35,14 +35,14 @@ classdef GLM < Saveable
         % OLS fitted parameter estimates.
         %
         % estimates = fit();
-            estimates = olsfit(vertcat(self.X),vertcat(self.data));
+            estimates = olsfit(getdesign(self),getdata(self));
         end
 
         function cmat = covmat(self)
         % covariance matrix for the design matrix.
         %
         % cmat = covmat()
-            X = vertcat(self.X);
+            X = getdesign(self);
             cmat = X' * X \ eye(size(X,2));
             % the classic way would use the inverse but this is slower and
             % less precise in Matlab (and perhaps in general)
@@ -53,7 +53,7 @@ classdef GLM < Saveable
         % degrees of freedom.
         %
         % d = df()
-            d = sum([self.nsamples]) - rank(vertcat(self.X));
+            d = sum([self.nsamples]) - rank(getdesign(self));
         end
 
         function r = residuals(self,varargin)
@@ -64,9 +64,9 @@ classdef GLM < Saveable
             if nargin > 1
                 prediction = vertcat(varargin{:});
             else
-                prediction = predictY(self,vertcat(self.X));
+                prediction = predictY(self,getdesign(self));
             end
-            r = vertcat(self.data) - prediction;
+            r = getdata(self) - prediction;
         end
 
         function mr = mrss(self)
@@ -85,7 +85,7 @@ classdef GLM < Saveable
             if nargin > 1                
                 X = vertcat(varargin{:});
             else
-                X = vertcat(self.X);
+                X = getdesign(self);
             end
             Yfit = X * fit(self);
         end
@@ -101,7 +101,7 @@ classdef GLM < Saveable
             if nargin == 1 
                 Yfit = predictY(self);
             end
-            mse = mean((Yfit-vertcat(self.data)).^2);
+            mse = mean((Yfit-getdata(self)).^2);
         end
 
         function R = rsquare(self,Yfit)
@@ -114,7 +114,7 @@ classdef GLM < Saveable
             if nargin == 1
                 Yfit = predictY(self);
             end
-            R = rsquare(Yfit,vertcat(self.data));
+            R = rsquare(Yfit,getdata(self));
         end
 
         function r = pearson(self,Yfit)
@@ -135,7 +135,7 @@ classdef GLM < Saveable
                 % self prediction
                 Yfit = predictY(self);
             end
-            r = corrpairs(Yfit,vertcat(self.data));
+            r = corrpairs(Yfit,getdata(self));
         end
 
         function con = contrast(self,conmat)
@@ -313,8 +313,7 @@ classdef GLM < Saveable
         % model = drawpermruns(self,runinds)
             X = {self.X};
             model = copy(self);
-            nrun = numel(self);
-            for r = 1:length(model)
+            for r = 1:numel(self)
                 model(r).X = X{runinds(r)};
             end
         end
@@ -685,10 +684,10 @@ classdef GLM < Saveable
         % PNAS. 
         %
         % model = infomodel(self,w)
-            X = vertcat(self.X);
+            X = getdesign(self);
             % project the data onto the discriminant matrix (so from
             % nsamples by nfeatures to nsamples by ndiscriminants)
-            dataw = vertcat(self.data) * w';
+            dataw = getdata(self) * w';
             % make a new GLM instance (NB, we ignore sub-classing here -
             % assume the original self.data has already been appropriately
             % pre-processed.
@@ -768,6 +767,21 @@ classdef GLM < Saveable
             end
             d = arrayfun(@(m)preallocate(self,...
                 [outshape{m} nperms]),1:nmeth,'uniformoutput',false);
+        end
+
+        function X = getdesign(self)
+        % return the vertically concatenated design matrix for the entered
+        % runs.
+        %
+        % X = getdesign(self)
+            X = vertcat(self.X);
+        end
+
+        function data = getdata(self)
+        % return the vertically concatenated data for the entered runs.
+        %
+        % data = getdata(self)
+            data = vertcat(self.data);
         end
     end
 end

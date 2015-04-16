@@ -19,7 +19,7 @@ classdef RSA < GLM
                 Xrdm = asrdmmat(modelrdms);
                 issplitdata = issplitdatardm(Xrdm);
                 datardm = asrdmmat(datardms);
-                [ncon,ncon,npredictors] = size(Xrdm);
+                [ncon,~,npredictors] = size(Xrdm);
                 % handle NaN content
                 nanx = isnan(Xrdm);
                 % first drop any conditions that are all NaNs (ie, all
@@ -66,7 +66,7 @@ classdef RSA < GLM
             if nargin > 1
                 prediction = matmean(varargin{:});
             else
-                prediction = predictY(self,vertcat(self.X));
+                prediction = predictY(self,getdesign(self));
             end
             r = getdata(self) - prediction;
         end
@@ -302,11 +302,11 @@ classdef RSA < GLM
         % Yfit = predictY([X])
             if nargin > 1
                 Xcell = varargin;
+                assert(isequal(Xcell{1},Xcell{:}),['mismatched input ' ...
+                    'model RDMs across runs']);
             else
-                Xcell = {self.X};
+                Xcell = {getdesign(self)};
             end
-            assert(isequal(Xcell{1},Xcell{:}),['mismatched model RDMs '...
-                'across runs']);
             % we ignore all subsequent varargin since we assume they
             % are all the same
             Yfit = predictY@GLM(self,Xcell{1});
@@ -324,8 +324,19 @@ classdef RSA < GLM
                 'RSA since dissimilarities are dependent']);
         end
 
+        function X = getdesign(self)
+        % get the design matrix for the first run, and test that all others
+        % are the same.
+        %
+        % X = getdesign(self)
+            X = getdesign@GLM(self(1));
+            assert(isequal(self(1).X,self.X),['mismatched model RDMs ' ...
+                'across runs']);
+        end
+
         function data = getdata(self)
-        % get data by averaging the RDMs across instances 
+        % get data by averaging the RDMs across instances.
+        %
         % data = getdata(self)
             data = mean(zcat(self.data),3);
         end
