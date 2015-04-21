@@ -16,7 +16,11 @@ if isequal(olsfit_cache_X,X) && isequal(olsfit_cache_Y,Y)
     return;
 end
 lastwarn('')
-betas = X \ Y;
+% nb slightly different formulation from the stock X \ Y - this is faster
+% for large Ys.
+% also, mtimescell - save memory by fitting each entry in the cell array Y
+% separately
+betas = mtimescell((X'*X)\X',Y);
 assert(isempty(lastwarn),'rank deficient fit');
 olsfit_cache_X = X;
 olsfit_cache_Y = Y;
