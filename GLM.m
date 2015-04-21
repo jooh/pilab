@@ -35,7 +35,7 @@ classdef GLM < Saveable
         % OLS fitted parameter estimates.
         %
         % estimates = fit();
-            estimates = olsfit(getdesign(self),getdata(self));
+            estimates = olsfit(getdesign(self),getdatac(self));
         end
 
         function cmat = covmat(self)
@@ -189,18 +189,18 @@ classdef GLM < Saveable
             p(p==0) = realmin(class(p));
         end
 
-        function [winners,meds] = crossvalidateproperty(self,property,values,metric,selectfun)
+        function [winners,res] = crossvalidateproperty(self,property,values,metric,selectfun)
         % tune a property (e.g., RidgeGLM's 'k') over a range of values (1D
         % array) using run-based crossvalidation (cvpredictionrun method)
         % and selectfun metric (default @max rsquare) as the selection
         % criterion. winners gives the winning value for each feature (1 by
-        % nfeatures), and med gives the median performance for each value
+        % nfeatures), and res gives the performance for each value
         % across splits (nvalues by nfeatures).
         %
         % This method should be applied to an independent training split of
         % the data to avoid circular inference.
         %
-        % [winners,meds] = crossvalidateproperty(property,values,[metric],[selectfun])
+        % [winners,res] = crossvalidateproperty(property,values,[metric],[selectfun])
             if ieNotDefined('metric')
                 metric = 'rsquare';
             end
@@ -208,16 +208,15 @@ classdef GLM < Saveable
                 selectfun = @max;
             end
             nvalues = length(values);
-            meds = preallocate(self,[nvalues self(1).nfeatures]);
+            res = preallocate(self,[nvalues self(1).nfeatures]);
             for v = 1:nvalues
                 % set property in train and test
                 [self.(property)] = deal(values(v));
                 % cross-validate fit with chosen property
-                meds(v,:) = cvpredictionrun(self,'predictY',metric,...
-                    [1 self(1).nfeatures]);
+                res(v,:) = cvpredictionrun(self,'predictY',metric);
             end
             % find winning value for each feature
-            [~,inds] = selectfun(meds,[],1);
+            [~,inds] = selectfun(res,[],1);
             winners = values(inds);
         end
 
@@ -240,7 +239,7 @@ classdef GLM < Saveable
             end
         end
 
-        function [ms,cvres] = cvclassificationrun(self,trainmeth,testmeth,outshape,varargin)
+        function res = cvclassificationrun(self,trainmeth,testmeth,varargin)
         % crossvalidate the performance of some classifier fit with
         % trainmeth (e.g. discriminant) and some testmeth (e.g.
         % infoc). this method is for cases where you want to do out of
@@ -250,12 +249,12 @@ classdef GLM < Saveable
         % methargs is any number of extra arguments. These get passed to
         % both trainmeth and testmeth (e.g., a contrast vector).
         %
-        % [ms,cvres] = cvclassificationrun(self,trainmeth,testmeth,outshape,[methargs])
-            [ms,cvres] = cvcrossclassificationrun(self,trainmeth,testmeth,...
-                outshape,varargin,varargin);
+        % res = cvclassificationrun(self,trainmeth,testmeth,[methargs])
+            res = cvcrossclassificationrun(self,trainmeth,testmeth,...
+                varargin,varargin);
         end
 
-        function [ms,cvres] = cvcrossclassificationrun(self,trainmeth,testmeth,outshape,trainargs,testargs)
+        function res = cvcrossclassificationrun(self,trainmeth,testmeth,trainargs,testargs)
         % crossvalidate the performance of some classifier fit with
         % trainmeth (e.g. discriminant) and some set of parameters (e.g. a
         % contrast vector) and apply testmeth (e.g.  infoc) with a
@@ -268,39 +267,44 @@ classdef GLM < Saveable
         % trainargs and testargs are cell arrays with any number of extra
         % arguments.         %
         %
-        % [ms,cvres] = cvcrossclassificationrun(self,trainmeth,testmeth,outshape,[trainargs],[testargs])
-            if ieNotDefined('trainargs')
+        % res = cvcrossclassificationrun(self,trainmeth,testmeth,[trainargs],[testargs])
+            if ~exist('trainargs','var') || isempty(trainargs)
                 trainargs = {};
             end
             if ~iscell(trainargs)
                 trainargs = {trainargs};
             end
-            if ieNotDefined('testargs')
+            if ~exist('testargs','var') || isempty(testargs)
                 testargs = {};
             end
             if ~iscell(testargs)
                 testargs = {testargs};
             end
-            if ieNotDefined('outshape')
-                % do a self train/test to infer size of output
-                temp = self.(trainmeth)(trainargs{:});
-                outshape = size(self.(testmeth)(temp,testargs{:}));
-                clear temp
-            end
-            assert(numel(outshape)<3,...
-                'testmeth must return at most 2d outputs, got %s',...
-                mat2str(outshape));
             splits = preparerunsplits(self);
             nsplit = size(splits,1);
             assert(nsplit > 1,'can only crossvalidate if >1 run');
-            cvres = preallocate(self,[outshape nsplit]);
+            prediction = cell(nsplit,1);
             for s = 1:nsplit
-                train = self(~splits(s,:));
-                test = self(splits(s,:));
-                tfit = train.(trainmeth)(trainargs{:});
-                cvres(:,:,s) = test.(testmeth)(tfit,testargs{:});
+                prediction{s} = feval(trainmeth,self(~splits(s,:)),...
+                    trainargs{:});
             end
-            ms = mean(cvres,3);
+            res = feval(testmeth,self(testrunind(self)),...
+                vertcat(prediction{:}),testargs{:});
+        end
+
+        function res = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs)
+        % one-way classification: train some classifier on a training split
+        % of self (self(~split)) using trainmeth with trainargs{:}. Then
+        % validate the classifier predictions on a test split (self(split))
+        % using testmeth with testargs{:}. Mainly useful for custom
+        % splitting schemes where you don't want to crossvalidate (ie use
+        % all data both for training and prediction).
+        %
+        % res = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs)
+            train = self(~split);
+            test = self(split);
+            tfit = feval(trainmeth,train,trainargs{:});
+            res = feval(testmeth,test,tfit,testargs{:});
         end
 
         function model = drawpermruns(self,runinds)
@@ -318,7 +322,7 @@ classdef GLM < Saveable
             end
         end
 
-        function [meds,cvres] = cvpredictionrun(self,trainmeth,testmeth,outshape)
+        function res = cvpredictionrun(self,trainmeth,testmeth)
         % crossvalidate the performance of some prediction trainmeth (e.g.,
         % predictY) using some testmeth (e.g., rsquare). this method is for
         % cases where you want to do out of sample regression, that is,
@@ -327,26 +331,18 @@ classdef GLM < Saveable
         % classification, that is predicting the columns of the design
         % matrix, use cvclassificationrun. 
         %
-        % [meds,cvres] = cvpredictionrun(self,trainmeth,testmeth,outshape)
-            if ieNotDefined('outshape')
-                % do a self test to infer size of output
-                prediction = self.(trainmeth)(self.X);
-                outshape = size(self.(testmeth)(prediction));
-            end
-            assert(numel(outshape)<3,...
-                'testmeth must return at most 2d outputs, got %s',...
-                mat2str(outshape));
+        % res = cvpredictionrun(self,trainmeth,testmeth)
             splits = preparerunsplits(self);
             nsplit = size(splits,1);
             assert(nsplit > 1,'can only crossvalidate if >1 run');
-            cvres = preallocate(self,[outshape nsplit]);
+            prediction = cell(nsplit,1);
             for s = 1:nsplit
                 train = self(~splits(s,:));
                 test = self(splits(s,:));
-                prediction = train.(trainmeth)(test.X);
-                cvres(:,:,s) = test.(testmeth)(prediction);
+                prediction{s} = feval(trainmeth,train,getdesign(test));
             end
-            meds = median(cvres,3);
+            res = feval(testmeth,self(testrunind(self)),...
+                vertcat(prediction{:}));
         end
 
         function [estimates,sterrs,bootest] = bootstraprunfit(self,nboot)
@@ -649,7 +645,7 @@ classdef GLM < Saveable
                 temp = varargout{m};
                 parfor b = 1:nboot
                     bootd = drawbootsample(self,bootinds(b,:));
-                    if rank(vertcat(bootd.X)) < bootd(1).npredictors
+                    if rank(getdesign(bootd)) < bootd(1).npredictors
                         temp(:,:,b) = NaN;
                     else
                         temp(:,:,b) = feval(bootmeth{m},bootd,varargin{:});
@@ -781,7 +777,32 @@ classdef GLM < Saveable
         % return the vertically concatenated data for the entered runs.
         %
         % data = getdata(self)
-            data = vertcat(self.data);
+            datac = getdatac(self);
+            data = vertcat(datac{:});
+        end
+
+        function data = getdatac(self)
+        % return the data in cell array format.
+        %
+        % data = getdatac(self)
+            data = {self.data};
+        end
+
+        function ind = testrunind(self)
+        % return the indices that sorts self according to cvgroup. This is
+        % used in the run-based CV methods, where a prediction is
+        % vertically concatenated across splits and compared against the
+        % data. The training split is organised in numerical order (ie, low
+        % cvsplits run before higher), so the test data must be sorted the
+        % same way.
+        %
+        % ind = testrunind(self)
+            [~,ind] = sort(horzcat(self.cvgroup));
+            n = numel(self);
+            if isempty(ind)
+                ind = 1:n;
+            end
+            assert(n == numel(ind),'cvgroup cannot be part empty');
         end
     end
 end
