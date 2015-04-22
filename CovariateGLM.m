@@ -1,73 +1,71 @@
 classdef CovariateGLM < GLM
     properties
         covariates
+        ncovariates
         ncovtouse
-        Xcache
-        datacache
-        Xcachencov
-        datacachencov
+        Xcovcache
+        Xcovcachen = NaN
+        datacovcache
+        datacovcachen = NaN
     end
 
     methods
         function gl = CovariateGLM(X,data,covariates)
             if ~any(nargin)
-                X = [];
-                data = [];
-                covariates = [];
+                [X,data,covariates] = deal([]);
             end
             gl = gl@GLM(X,data);
             assert(gl.nsamples==size(covariates,1),...
                 'covariates do not match nsamples');
             gl.covariates = covariates;
-            gl.ncovtouse = size(covariates,2);
-            % prepare the cache
-            pmat = projectionmatrix(covariates);
-            gl.Xcache = pmat * X;
-            gl.datacache = pmat * data;
-            gl.Xcachencov = gl.ncovtouse;
-            gl.datacachencov = gl.ncovtouse;
+            gl.ncovariates = size(covariates,2);
+            gl.ncovtouse = gl.ncovariates;
         end
 
         function data = getdatac(self)
             nrun = numel(self);
             % filter each run separately to preserve independence
             for r = 1:nrun
-                if self(r).ncovtouse ~= self(r).datacachencov
+                if self(r).ncovtouse ~= self(r).datacovcachen
                     % covariates changed so need to re-calculate projection
-                    self(r).datacache = projectionmatrix(...
-                        self(r).covariates(:,1:self(r).ncovtouse)) * ...
-                        self(r).data;
-                    self(r).datacachencov = self(r).ncovtouse;
+                    self(r).datacovcache = ...
+                        getprojectionmatrix(self(r)) * self(r).data;
+                    self(r).datacovcachen = self(r).ncovtouse;
                 end
             end
-            data = {self.datacache};
+            data = {self.datacovcache};
         end
 
         function X = getdesign(self)
             nrun = numel(self);
             for r = 1:nrun
-                if self(r).ncovtouse ~= self(r).Xcachencov
-                    self(r).Xcache = projectionmatrix(...
-                        self(r).covariates(:,1:self(r).ncovtouse)) * ...
+                if self(r).ncovtouse ~= self(r).Xcovcachen
+                    self(r).Xcovcache = getprojectionmatrix(self(r)) * ...
                         self(r).X;
-                    self(r).Xcachencov = self(r).ncovtouse;
+                    self(r).Xcovcachen = self(r).ncovtouse;
                 end
             end
-            X = vertcat(self.Xcache);
+            X = vertcat(self.Xcovcache);
+        end
+
+        function pmat = getprojectionmatrix(self)
+            assert(numel(self)==1,['covariates should be processed ' ...
+                'separately for each run']);
+            pmat = projectionmatrix(self.covariates(:,1:self.ncovtouse));
         end
 
         function model = drawpermsample(self,inds)
             model = drawpermsample@GLM(self,inds);
             % clear the cache to prevent inaccurate filtering
-            [model.Xcachencov] = deal(NaN);
-            [model.datacachencov] = deal(NaN);
+            [model.Xcovcachen] = deal(NaN);
+            [model.datacovcachen] = deal(NaN);
         end
 
         function model = drawpermflipsample(self,inds)
             model = drawpermflipsample(self,inds);
             % clear the cache to prevent inaccurate filtering
-            [model.Xcachencov] = deal(NaN);
-            [model.datacachencov] = deal(NaN);
+            [model.Xcovcachen] = deal(NaN);
+            [model.datacovcachen] = deal(NaN);
         end
     end
 end
