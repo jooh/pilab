@@ -70,7 +70,6 @@ groupres = struct('rows_contrast',{subres(1).rows_contrast},...
     'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]),...
     'tail',{subres(1).tail});
 
-
 % populate the groupres struct
 targets = intersect(fieldnames(subres),...
     {targetfield,'pperm','ppara','medianboot','medianste',...
@@ -348,7 +347,15 @@ if nperm > 1 || nboot > 0
                     nulldist.(targetfield)(c,:,:) = tempnull;
                 end
             end
-            meanres.pfdrthresh(c) = FDRthreshold(meanres.ppara(c,:));
+            try
+                meanres.pfdrthresh(c) = FDRthreshold(meanres.ppara(c,:));
+            catch
+                err = lasterror;
+                if ~strcmp(err.identifier,'MATLAB:badsubscript')
+                    rethrow(err);
+                end
+                warning('FDR estimation failed - not adequate p distro?');
+            end
 
             % bootstrap
             if nboot > 0
