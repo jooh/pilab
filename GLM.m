@@ -342,7 +342,7 @@ classdef GLM < Saveable
                 prediction{s} = feval(trainmeth,train,getdesign(test));
             end
             res = feval(testmeth,self(testrunind(self)),...
-                vertcat(prediction{:}));
+                getdata(self,prediction{:}));
         end
 
         function [estimates,sterrs,bootest] = bootstraprunfit(self,nboot)
@@ -773,11 +773,15 @@ classdef GLM < Saveable
             X = vertcat(self.X);
         end
 
-        function data = getdata(self)
+        function data = getdata(self,varargin)
         % return the vertically concatenated data for the entered runs.
         %
         % data = getdata(self)
-            datac = getdatac(self);
+            if nargin>1
+                datac = varargin;
+            else
+                datac = getdatac(self);
+            end
             data = vertcat(datac{:});
         end
 
@@ -785,7 +789,7 @@ classdef GLM < Saveable
         % return the data in cell array format.
         %
         % data = getdatac(self)
-            data = {self.data};
+            data = ascol({self.data});
         end
 
         function ind = testrunind(self)
