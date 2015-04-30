@@ -83,21 +83,21 @@ classdef Volume < handle
                 'frameperiod',[]},...
                 'verbose=0','suppressUnknownArgMessage=1');
             self.frameperiod = frameperiod;
-            if isempty(meta)
-                self.meta.samples = metasamples;
-                self.meta.features = metafeatures;
-            else
-                assert(isequal(self.standardstruct,metasamples,...
-                    metafeatures),['cannot define both meta '...
-                    'and metasamples or metafeatures']);
-                self.meta = meta;
-            end
             % insure meta samples and features contain mandatory
             % fields from self.standardstruct
-            self.meta.samples = catstruct(self.standardstruct,...
-                self.meta.samples);
-            self.meta.features = catstruct(self.standardstruct,...
-                self.meta.features);
+            self.meta.samples = self.standardstruct;
+            self.meta.features = self.standardstruct;
+            % update with metafeatures/metasamples
+            self.meta.samples = catstruct(self.meta.samples,metasamples);
+            self.meta.features = catstruct(self.meta.features,...
+                metafeatures);
+            % update with meta
+            if ~isempty(meta)
+                self.meta.samples = catstruct(self.meta.samples,...
+                    meta.samples);
+                self.meta.features = catstruct(self.meta.features,...
+                    meta.features);
+            end
             % insure that meta samples are in rows and meta features in
             % columns
             self.meta.samples = self.imposestructfieldshape(...
