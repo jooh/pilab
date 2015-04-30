@@ -11,6 +11,8 @@ if ~isrdm(rdm)
     return;
 end
 
+% convert to matrix form for test
+rdm = asrdmmat(rdm);
 nrdm = size(rdm,3);
 for n = 1:nrdm
     if sum(~isnan(diag(rdm(:,:,n),-1)))~=1
