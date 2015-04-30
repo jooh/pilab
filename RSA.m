@@ -334,11 +334,21 @@ classdef RSA < GLM
                 'across runs']);
         end
 
-        function data = getdata(self)
+        function data = getdatac(self)
+            % return a cell wrapped first run
+            data = {getdata(self)};
+        end
+
+        function data = getdata(self,varargin)
         % get data by averaging the RDMs across instances.
         %
         % data = getdata(self)
-            data = mean(zcat(self.data),3);
+            if nargin>1
+                indata = varargin;
+            else
+                indata = {self.data};
+            end
+            data = matmean(indata{:});
         end
     end
 end
