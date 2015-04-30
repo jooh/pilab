@@ -11,6 +11,10 @@ persistent olsfit_cache_X
 persistent olsfit_cache_Y
 persistent olsfit_cache_betas
 
+if ~iscell(Y)
+    Y = {Y};
+end
+
 if isequal(olsfit_cache_X,X) && isequal(olsfit_cache_Y,Y)
     betas = olsfit_cache_betas;
     return;
