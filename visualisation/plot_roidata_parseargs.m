@@ -7,19 +7,20 @@ function [m,errs,p,ylab,groupm,groupp] = plot_roidata_parseargs(res,groupres,var
 
 
 mlabel = [];
-getArgs(varargin,{'mtarget','mean','errtarget',[],'ptarget','ppara',...
+getArgs(varargin,{'mtarget','mean','errtarget',[],'ptarget',[],...
     'mlabel','','errlabel','','groupmtarget','r','groupptarget',...
-    'pperm'},'suppressUnknownArgMessage=1');
+    ''},'suppressUnknownArgMessage=1');
 
-if ieNotDefined('groupres')
-    groupm = [];
-    groupp = [];
-else
+groupm = [];
+groupp = [];
+if ~ieNotDefined('groupres')
     % this extra test is mainly to make it easy to spot code where the call
     % syntax needs to be updated
     assert(isstruct(groupres),'groupres must be second input');
     groupm = groupres.(groupmtarget);
-    groupp = groupres.(groupptarget);
+    if ~isempty(groupptarget) && isfield(groupres,groupptarget)
+        groupp = groupres.(groupptarget);
+    end
 end
 
 % fill in a dummy label if nothing else is specified
