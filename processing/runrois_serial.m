@@ -1,17 +1,24 @@
-% serial version of runrois_spmd. Mainly useful for debugging ROIProcessor
-% instances. See runrois_spmd for documentation.
+% serial version of runrois_spmd (see this function for documentation).
 %
-% result = runrois(roimat,designmat,epimat,chunks,processor,minn,nreturn)
-function result = runrois(roimat,designmat,epimat,chunks,processor,minn,nreturn)
+% This code should be functionally equivalent to runrois_spmd but will a)
+% be easier to use when debugging processors, b) run a lot faster when you
+% already have parallelisation in your code -  (since Matlab only
+% parallelises the outermost level and all those unused parallel toolbox
+% bits in runrois_spmd still come with overhead).
+%
+% result = runrois_serial(roimat,datamat,processor,nreturn,minn,[varargin])
+function result = runrois_serial(roimat,datamat,processor,nreturn,minn,varargin)
+
 if ischar(processor)
     processor = loadbetter(processor);
 end
 if isstruct(processor)
     processor = struct2obj(processor);
 end
-validvox = full(roimat~=0);
-nvalid = sum(validvox,2);
-nroi = size(validvox,1);
+
+validfeat = full(roimat~=0);
+nvalid = sum(validfeat,2);
+nroi = size(validfeat,1);
 goodres = nvalid>0 & nvalid >=minn;
 result = cell(nroi,nreturn);
 retind = 1:nreturn;
@@ -19,8 +26,8 @@ for b = 1:nroi
     if ~goodres(b)
         continue
     end
-    [result{b,retind}] = call(processor,designmat,...
-        epimat(:,validvox(b,:)),chunks);
+    [result{b,retind}] = call(processor,...
+        datamat(:,validfeat(b,:)),varargin{:});
 end
 result(~goodres,:) = {NaN(size(result{find(...
     goodres,1,'first')}))};

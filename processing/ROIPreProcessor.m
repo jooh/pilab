@@ -22,13 +22,13 @@ classdef ROIPreProcessor < MetaProcessor
             dpp.operation = operation;
         end
 
-        function varargout = call(self,designmat,epimat,chunks)
+        function varargout = call(self,epimat,designmat,chunks)
             assert(numel(self)==1,'only support for one entry');
             % apply some preprocessing
             epimat = feval(self.operation,epimat);
             % cart off to processor (probably a GLMMetaProcessor)
             [varargout{self(1).processor(1).nreturn}] = ...
-                call(self.processor,designmat,epimat,chunks);
+                call(self.processor,epimat,designmat,chunks);
         end
     end
 end

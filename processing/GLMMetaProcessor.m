@@ -26,8 +26,8 @@ classdef GLMMetaProcessor < MetaProcessor
             ga.constructor = constructor;
         end
 
-        function varargout = call(self,design,data,chunks)
-            model = call(self.constructor,design,data,chunks);
+        function varargout = call(self,data,design,chunks)
+            model = call(self.constructor,data,design,chunks);
             [varargout{1:self(1).processor(1).nreturn}] = ...
                 call@MetaProcessor(self,model);
         end

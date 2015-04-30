@@ -5,7 +5,7 @@
 % gl = GLMConstructor(glmclass,cvgroup,[glmvarargin])
 %
 % call:
-% model = call(gl,designmat,epimat,chunks)
+% model = call(gl,epimat,designmat,chunks)
 classdef GLMConstructor < Saveable
     properties
         glmclass = 'GLM';
@@ -30,7 +30,7 @@ classdef GLMConstructor < Saveable
             gl.glmvarargs = varargin;
         end
 
-        function model = call(self,designmat,epimat,chunks)
+        function model = call(self,epimat,designmat,chunks)
             model = array2glm(designmat,epimat,chunks,self.glmclass,...
                 self.glmvarargs{:});
             if ~isempty(self.cvgroup)

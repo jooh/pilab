@@ -8,7 +8,7 @@
 % vl = ROIProcessor(rois,processor,[minn=0],[runfun='runrois_serial'])
 %
 % call:
-% varargout = call(self,designmat,epimat,chunks)
+% varargout = call(self,data,varargin)
 classdef ROIProcessor < MetaProcessor
     properties
         rois
@@ -37,8 +37,7 @@ classdef ROIProcessor < MetaProcessor
             vl.combiner = @(varargin)cat(2,varargin{:});
         end
 
-        function varargout = call(self,designmat,epimat,chunks)
-
+        function varargout = call(self,epimat,varargin)
             % prepare the output
             nreturn = self(1).processor(1).nreturn;
             % parfor indexing in non-parfor'ed dimension only works if you
@@ -53,8 +52,8 @@ classdef ROIProcessor < MetaProcessor
             % the ROIProcessor instance will almost certainly get passed
             % too if you don't do this)
             pstruct = obj2struct(self.processor);
-            result = feval(self.runfun,self.rois.data,designmat,epimat,...
-                chunks,pstruct,self.minn,nreturn);
+            result = feval(self.runfun,self.rois.data,epimat,pstruct,...
+                nreturn,self.minn,varargin{:});
             [varargout{retind}] = combinereturns(self,result);
         end % call method
 

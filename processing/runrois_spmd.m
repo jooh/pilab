@@ -1,15 +1,17 @@
-% run a processor on some set of ROIs (rows in roimat) using spmd
+% run a processor on each of a set of ROIs (rows in roimat) using spmd
 % parallelisation. Tries to be clever about only passing data to workers
-% once, and only passing the bits of epimat that each worker needs.
+% once, and only passing the bits of datamat that each worker needs. With
+% reasonably big datasets (e.g. fMRI size - a few GB) this leads to a
+% speedup over parfor and less risk of running out of memory on the
+% workers.
 %
 % INPUTS:
 % roimat: nroi by nfeatures (can be sparse)
-% designmat: nsamples by nconditions
-% epimat: nsamples by nfeatures
-% chunks: nsamples by 1 vector
+% datamat: nsamples by nfeatures
 % processor: function/method/struct that get's fevaled (see below)
-% minn: minimum ROI size to run (smaller get NaNed out)
 % nreturn: number of returns from processor
+% minn: minimum ROI size to run (smaller get NaNed out)
+% [varargin]: any varargin get passed to processor (see below)
 %
 % OUTPUTS:
 % result: nsamples by nreturn cell array
@@ -22,9 +24,10 @@
 % b) the processor (or the result of loading the above) can be a struct,
 %   which gets converted to object instance by struct2obj
 %
-% However the processor is constructed, it then gets called like so:
-% [batchresult{b,retind}] = call(processor,designmat,...
-%   Cbatchepi(:,Cbatchvox(b,:)),chunks);
+% However the processor is constructed, it must have a 'call' method/field
+% which supports the following syntax:
+% [batchresult{b,retind}] = call(processor,...
+%   Cbatchdata(:,Cbatchfeat(b,:)),varargin{:});
 %
 % Note that if you are uncomfortable with object classes you can probably
 % make your processor a struct with a function handle in the 'call' field.
@@ -32,35 +35,33 @@
 % use obj2struct to convert such structs to a format that can be passed in
 % spmd (see above).
 %
-% result = runrois_spmd(roimat,designmat,epimat,chunks,processor,...
-        % minn,nreturn)
-function result = runrois_spmd(roimat,designmat,epimat,chunks,processor,...
-        minn,nreturn)
+function result = runrois_spmd(roimat,datamat,processor,nreturn,minn,varargin)
+
 retind = 1:nreturn;
 
 % (nb transpose because distributed operates along last dim
 % (columns)
-Dvalidvox = distributed(roimat');
+Dvalidfeat = distributed(roimat');
 % find the mask for each batch and restrict each workers roimat to these
 spmd
-    Cbatchvox = full(getLocalPart(Dvalidvox)'~=0);
-    Cbatchmask = any(Cbatchvox,1);
-    Cbatchvox = Cbatchvox(:,Cbatchmask);
-    Cnvalid = sum(Cbatchvox,2);
-    Cnroi = size(Cbatchvox,1);
+    Cbatchfeat = full(getLocalPart(Dvalidfeat)'~=0);
+    Cbatchmask = any(Cbatchfeat,1);
+    Cbatchfeat = Cbatchfeat(:,Cbatchmask);
+    Cnvalid = sum(Cbatchfeat,2);
+    Cnroi = size(Cbatchfeat,1);
     Cbatchgoodres = (Cnvalid~=0 & Cnvalid>=minn);
 end
-clear Dvalidvox;
+clear Dvalidfeat;
 
-Cbatchepi = Composite;
-% this is not spmd to avoid passing the full epimat to workers
-for batch = 1:numel(Cbatchepi)
+Cbatchdata = Composite;
+% this is not spmd to avoid passing the full datamat to workers
+for batch = 1:numel(Cbatchdata)
     % retrieve the (small) Cbatchmask from worker and use to
-    % index epimat
-    Cbatchepi{batch} = epimat(:,Cbatchmask{batch});
+    % index datamat
+    Cbatchdata{batch} = datamat(:,Cbatchmask{batch});
 end
 % don't need this anymore
-clear epimat;
+clear datamat;
 clear Cbatchmask;
 
 spmd
@@ -74,7 +75,7 @@ spmd
     else
         Cbatchprocessor = processor;
     end
-    % get those voxels (and transpose back)
+    % get those feat (and transpose back)
     batchresult = cell(Cnroi,nreturn);
     for b = 1:Cnroi
         % check for invalid ROIs here
@@ -82,8 +83,9 @@ spmd
             % empty or too small roi
             continue
         end
-        [batchresult{b,retind}] = call(Cbatchprocessor,designmat,...
-            Cbatchepi(:,Cbatchvox(b,:)),chunks);
+        % TODO - fix input args for GLMConstructor
+        [batchresult{b,retind}] = call(Cbatchprocessor,...
+            Cbatchdata(:,Cbatchfeat(b,:)),varargin{:});
     end
 end
 
