@@ -6,10 +6,11 @@
 function rdms = vec2rdm(vecs)
 
 [npairs nrdm] = size(vecs);
-assert(ndims(vecs)==2,'input must be 2d with pairs in second dim')
+assert(ismatrix(vecs),'input must be 2d with pairs in second dim')
 
 % find the number of conditions given the number of pairs
 n = npairs2n(npairs);
+assert(n==round(n),'%d is not a valid number of pairs for RDM',npairs);
 
 rdms = zeros([n,n,nrdm],class(vecs));
 % fill in lower triangular vector
