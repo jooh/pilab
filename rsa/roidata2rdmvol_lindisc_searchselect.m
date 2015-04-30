@@ -125,7 +125,7 @@ for sp = 1:nsplit
             % produces equivalent output to using
             % roidata2rdmvol_lindisc_batch and plugging the resulting RDMs
             % into roidata_rsa
-            r = sl.call(designtrain.data,epitrain.data,...
+            r = sl.call(epitrain.data,designtrain.data,...
                 epitrain.meta.samples.chunks);
 
             % make a new roivol containing ROIs generating according each
