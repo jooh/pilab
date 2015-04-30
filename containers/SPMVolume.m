@@ -1,3 +1,6 @@
+% SPM-based header volume
+%
+% SPMVolume < MriVolume
 classdef SPMVolume < MriVolume
 
     methods
@@ -60,7 +63,7 @@ classdef SPMVolume < MriVolume
                     if isempty(mask)
                         mask = true(size(spm_read_vols(dV(1))));
                     end
-                    [datamat,mask] = loadmaskedvolumes(dV,mask);
+                    datamat = loadmaskedvolumes(dV,mask);
                     filenames = [filenames; {dV.fname}'];
                 elseif isa(thisdata,'SPMVolume')
                     % interesting! 
