@@ -3,7 +3,7 @@ function glman_rdm = rdms_lindisc_configureprocess(varargin)
 getArgs(varargin,{'glmvarargs',{},'cvsplit',[],...
     'glmclass','GLM','sterrunits',0,'crossvalidate',true,...
     'crosscon',[],'ncon',[],'setclass','double','demean',false,...
-    'nperms',0});
+    'nperms',0,'onewayvalidation',false});
 
 if ~iscell(glmvarargs)
     if isempty(glmvarargs)
@@ -38,13 +38,13 @@ logstr('testmeth: %s\n',testmeth);
 glmspec = GLMConstructor(glmclass,cvsplit,glmvarargs{:});
 
 
+nrun = numel(cvsplit);
 if nperms > 1
     assert(~isempty(cvsplit),['cvsplit must be defined for ' ...
         'permutation test']);
     % bit hacky but there's no telling how many runs we will have
     % at this stage.
     % Note that this solution isn't exactly bullet proof.
-    nrun = numel(cvsplit);
     pind = permuteindices(nrun,nperms);
 end
 
@@ -55,8 +55,20 @@ if isempty(crosscon)
     cons = allpairwisecontrasts(feval(setclass,...
         ncon));
     if crossvalidate
-        cvmeth = 'cvclassificationrun';
-        args = {'discriminant',testmeth,[np 1],cons};
+        if onewayvalidation
+            cvmeth = 'validatedclassification';
+            % NB, the [false true] bit makes the strong assumption that
+            % you will have only 2 runs, where the first is train and the
+            % second test.
+            assert(nrun==2,['only 2 runs for validatedclassification ' ...
+                'first train, second test']);
+            assert(nperms<2,['permutation tests are problematic for ' ...
+                'validatedclassification']);
+            args = {[false,true],'discriminant',{cons},testmeth,{cons}};
+        else
+            cvmeth = 'cvclassificationrun';
+            args = {'discriminant',testmeth,[np 1],cons};
+        end
         if nperms < 2
             rdm = GLMProcessor(cvmeth,[],1,args{:});
         else
@@ -81,10 +93,22 @@ else
     crossconout{1}(:,crosscon{1}) = cons;
     crossconout{2} = fullmat;
     crossconout{2}(:,crosscon{2}) = cons;
-    cvmeth = 'cvcrossclassificationrun';
     basearg = {[],1};
-    arga = {'discriminant',testmeth,[np 1],crossconout{1},crossconout{2}};
-    argb = {'discriminant',testmeth,[np 1],crossconout{2},crossconout{1}};
+    if onewayvalidation
+        cvmeth = 'validatedclassification';
+        assert(nrun==2,['only 2 runs for validatedclassification ' ...
+            'first train, second test']);
+        assert(nperms<2,['permutation tests are problematic for ' ...
+            'validatedclassification']);
+        arga = {[false,true],'discriminant',crossconout(1),testmeth,...
+            crossconout(2)};
+        argb = {[false,true],'discriminant',crossconout(2),testmeth,...
+            crossconout(1)};
+    else
+        cvmeth = 'cvcrossclassificationrun';
+        arga = {'discriminant',testmeth,[np 1],crossconout{1},crossconout{2}};
+        argb = {'discriminant',testmeth,[np 1],crossconout{2},crossconout{1}};
+    end
     if nperms < 2
         rdmcross(1) = GLMProcessor(cvmeth,basearg{:},arga{:});
         rdmcross(2) = GLMProcessor(cvmeth,basearg{:},argb{:});
