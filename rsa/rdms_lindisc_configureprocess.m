@@ -50,7 +50,6 @@ end
 
 if isempty(crosscon)
     % straight RDM
-    np = nchoosek(ncon,2);
     % contrast vector of correct class
     cons = allpairwisecontrasts(feval(setclass,...
         ncon));
@@ -67,7 +66,7 @@ if isempty(crosscon)
             args = {[false,true],'discriminant',{cons},testmeth,{cons}};
         else
             cvmeth = 'cvclassificationrun';
-            args = {'discriminant',testmeth,[np 1],cons};
+            args = {'discriminant',testmeth,cons};
         end
         if nperms < 2
             rdm = GLMProcessor(cvmeth,[],1,args{:});
@@ -106,8 +105,8 @@ else
             crossconout(1)};
     else
         cvmeth = 'cvcrossclassificationrun';
-        arga = {'discriminant',testmeth,[np 1],crossconout{1},crossconout{2}};
-        argb = {'discriminant',testmeth,[np 1],crossconout{2},crossconout{1}};
+        arga = {'discriminant',testmeth,crossconout{1},crossconout{2}};
+        argb = {'discriminant',testmeth,crossconout{2},crossconout{1}};
     end
     if nperms < 2
         rdmcross(1) = GLMProcessor(cvmeth,basearg{:},arga{:});
