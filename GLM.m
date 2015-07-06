@@ -239,7 +239,7 @@ classdef GLM < Saveable
             end
         end
 
-        function res = cvclassificationrun(self,trainmeth,testmeth,varargin)
+        function [res,splitres] = cvclassificationrun(self,trainmeth,testmeth,varargin)
         % crossvalidate the performance of some classifier fit with
         % trainmeth (e.g. discriminant) and some testmeth (e.g.
         % infoc). this method is for cases where you want to do out of
@@ -249,12 +249,12 @@ classdef GLM < Saveable
         % methargs is any number of extra arguments. These get passed to
         % both trainmeth and testmeth (e.g., a contrast vector).
         %
-        % res = cvclassificationrun(self,trainmeth,testmeth,[methargs])
-            res = cvcrossclassificationrun(self,trainmeth,testmeth,...
+        % [res,splitres] = cvclassificationrun(self,trainmeth,testmeth,[methargs])
+            [res,splitres] = cvcrossclassificationrun(self,trainmeth,testmeth,...
                 varargin,varargin);
         end
 
-        function res = cvcrossclassificationrun(self,trainmeth,testmeth,trainargs,testargs)
+        function [res,splitres] = cvcrossclassificationrun(self,trainmeth,testmeth,trainargs,testargs)
         % crossvalidate the performance of some classifier fit with
         % trainmeth (e.g. discriminant) and some set of parameters (e.g. a
         % contrast vector) and apply testmeth (e.g.  infoc) with a
@@ -265,7 +265,7 @@ classdef GLM < Saveable
         % data samples, use cvpredictionrun.
         %
         % trainargs and testargs are cell arrays with any number of extra
-        % arguments.         %
+        % arguments.
         %
         % res = cvcrossclassificationrun(self,trainmeth,testmeth,[trainargs],[testargs])
             if ~exist('trainargs','var') || isempty(trainargs)
@@ -283,13 +283,14 @@ classdef GLM < Saveable
             splits = preparerunsplits(self);
             nsplit = size(splits,1);
             assert(nsplit > 1,'can only crossvalidate if >1 run');
-            prediction = cell(nsplit,1);
+            splitres = cell(nsplit,1);
             for s = 1:nsplit
-                prediction{s} = feval(trainmeth,self(~splits(s,:)),...
+                prediction = feval(trainmeth,self(~splits(s,:)),...
                     trainargs{:});
+                splitres{s} = feval(testmeth,self(splits(s,:)),...
+                    prediction,testargs{:});
             end
-            res = feval(testmeth,self(testrunind(self)),...
-                vertcat(prediction{:}),testargs{:});
+            res = matmean(splitres{:});
         end
 
         function res = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs)
