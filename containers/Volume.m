@@ -249,7 +249,7 @@ classdef Volume < handle
         end
 
         function vol = copy(self,dat,meta)
-            vol = Volume(dat,'meta',meta,...
+            vol = feval(class(self),dat,'meta',meta,...
                 'frameperiod',self.frameperiod);
         end
 
@@ -475,7 +475,7 @@ classdef Volume < handle
             new.samples = Volume.parsemeta(org.samples,new.samples,...
                 @vertcat);
             new.features = Volume.parsemeta(org.features,new.features,...
-                @testmeta);
+                @Volume.testmeta);
         end
     end
 end
