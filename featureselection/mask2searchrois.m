@@ -32,7 +32,7 @@ spheres = sparse(sl.vol.nfeatures,sl.vol.nfeatures);
 r = NaN([1 sl.vol.nfeatures]);
 
 % run
-fprintf('mapping %d searchlights...\n',sl.vol.nfeatures);
+logstr('mapping %d searchlights...\n',sl.vol.nfeatures);
 tic;
 parfor n = 1:sl.vol.nfeatures
     % get sphere index
@@ -44,7 +44,7 @@ parfor n = 1:sl.vol.nfeatures
     spheres(n,:) = sp;
     r(n) = sl.radius;
 end
-fprintf('finished in %s.\n',seconds2str(toc));
+logstr('finished in %s.\n',seconds2str(toc));
 diagnostic.r = r;
 % number of voxels in each sphere
 sb = spheres;
