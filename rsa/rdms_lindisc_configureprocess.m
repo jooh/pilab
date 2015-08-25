@@ -3,7 +3,7 @@ function glman_rdm = rdms_lindisc_configureprocess(varargin)
 getArgs(varargin,{'glmvarargs',{},'cvsplit',[],...
     'glmclass','GLM','sterrunits',0,'crossvalidate',true,...
     'crosscon',[],'ncon',[],'setclass','double','demean',false,...
-    'nperms',0,'onewayvalidation',false});
+    'nperms',0,'onewayvalidation',false,'returnp',false});
 
 if ~iscell(glmvarargs)
     if isempty(glmvarargs)
@@ -27,10 +27,15 @@ elseif iscell(crosscon)
     end
 end
 
+nreturn = 1;
 if sterrunits
     testmeth = 'infot';
 else
     testmeth = 'infoc';
+end
+if returnp
+    assert(strcmp(testmeth,'infot'));
+    nreturn = 2;
 end
 logstr('testmeth: %s\n',testmeth);
 
@@ -69,9 +74,10 @@ if isempty(crosscon)
             args = {'discriminant',testmeth,cons};
         end
         if nperms < 2
-            rdm = GLMProcessor(cvmeth,[],1,args{:});
+            rdm = GLMProcessor(cvmeth,[],nreturn,args{:});
         else
-            rdm = GLMProcessor('permuteruns',[],1,pind,cvmeth,[],args{:});
+            rdm = GLMProcessor('permuteruns',[],nreturn,pind,cvmeth,[],...
+                args{:});
         end
         % NB no longer any need for mean operation here.
         glman_rdm = GLMMetaProcessor(glmspec,rdm,[]);
@@ -92,7 +98,7 @@ else
     crossconout{1}(:,crosscon{1}) = cons;
     crossconout{2} = fullmat;
     crossconout{2}(:,crosscon{2}) = cons;
-    basearg = {[],1};
+    basearg = {[],nreturn};
     if onewayvalidation
         cvmeth = 'validatedclassification';
         assert(nrun==2,['only 2 runs for validatedclassification ' ...
