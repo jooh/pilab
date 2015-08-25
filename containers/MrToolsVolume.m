@@ -18,6 +18,9 @@ classdef MrToolsVolume < MriVolume
             if ieNotDefined('data')
                 data = {};
             end
+            if ieNotDefined('mask')
+                mask = [];
+            end
             if ~iscell(data)
                 data = {data};
             end
@@ -36,7 +39,7 @@ classdef MrToolsVolume < MriVolume
                     temp.sessiondir = setifunset(temp.sessiondir,...
                         thisdata.sessiondir,true);
                     datamat = thisdata.data;
-                    temp.meta = updatemeta(temp.meta,thisdata.meta);
+                    temp.meta = Volume.updatemeta(temp.meta,thisdata.meta);
                     % also bring along the mask if possible and needed
                     mask = setifunset(mask,thisdata.mask,true);
                     header = setifunset(header,thisdata.header);
@@ -77,24 +80,32 @@ classdef MrToolsVolume < MriVolume
                     v = viewSet(v,'currentgroup',group);
                     groupnum = viewGet(v,'currentgroup');
                     if strcmp(scans,'all')
-                        scans = 1:viewGet(v,'numscans');
+                        scans = 1:viewGet(v,'numscans',groupnum);
                     end
                     nscan = numel(scans);
-                    temp.frameperiod = viewGet(v,'frameperiod');
+                    temp.frameperiod = viewGet(v,'frameperiod',scans(1),...
+                        groupnum);
                     datamat = [];
                     % load in one go
                     roit = loadROITSeries(v,maskname,scans,groupnum,...
                         'straightXform=1','keepNAN=1');
+                    % loadROITSeries sometimes results in messy rows
+                    logstr('\n');
                     voxsize = setifunset(voxsize,roit{1}.voxelSize,1);
                     coords = roit{1}.scanCoords;
-                    dims = viewGet(v,'scandims');
+                    dims = viewGet(v,'scandims',scans(1),groupnum);
                     for s = 1:nscan
                         n = size(roit{s}.tSeries,2);
+                        % mrTools quietly returns no data if you enter an
+                        % invalid scan number (e.g. greater than the number
+                        % of available scans).
+                        assert(n>0,'no tSeries data for scan %d\n',...
+                            scans(s));
                         chunks = [chunks; ones(n,1)*scans(s)];
                         datamat = [datamat; roit{s}.tSeries'];
                         % add volume number for spm_vol compatibility
                         filenames = [filenames; mat2strcell((1:n)',...
-                            [viewGet(v,'tseriespath',scans(s)) ',%d'])];
+                            [viewGet(v,'tseriespath',scans(s),groupnum) ',%d'])];
                         % check that coordinates are matched across scans
                         coords = setifunset(coords,roit{s}.scanCoords,1);
                     end
@@ -174,7 +185,9 @@ classdef MrToolsVolume < MriVolume
             % this is a little destructive but Matlab does not support
             % a second output argument for constructors, and we don't
             % really want to store the view in the object instance.
-            deleteView(v);
+            if ~isempty(v)
+                deleteView(v);
+            end
             cd(orgdir);
         end
     end
