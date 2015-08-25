@@ -10,7 +10,8 @@ getArgs(varargin,{'glmclass','GLM','nperm',1,'nboot',0,...
     'contrasts',emptystruct('name','conplus','conminus','tail'),...
     'bootmeth','bootstrapruns','bootprep','preparerunboots',...
     'permmeth','permuteruns','permprep','preparerunperms',...
-    'customfits',emptystruct('name','funhand','cons','tail')});
+    'customfits',emptystruct('name','funhand','cons','tail'),...
+    'regnames',''});
 
 if ~iscell(glmclassargs)
     % this extra bit of flexibility helps with cases where you just want to
@@ -33,10 +34,17 @@ if isa(designvol,'Volume')
         'mismatched epivol/designvol');
     model = vol2glm(designvol,epivol,glmclass,glmclassargs{:});
     res.rows_contrast = designvol.meta.features.labels';
-elseif isrdm(designvol)
+    assert(isempty(regnames),'cannot specify regnames for volume inputs');
+elseif isrdm(designvol) && isstruct(designvol)
     model = array2glm(asrdmvec(designvol),epivol.data,...
         ones(size(epivol.data,1),1),glmclass,glmclassargs{:});
     res.rows_contrast = ascol({designvol.name});
+    assert(isempty(regnames),'cannot specify regnames for RDM inputs');
+else
+    % damn the torpedoes
+    model = array2glm(designvol,epivol.data,...
+        ones(size(epivol.data,1),1),glmclass,glmclassargs{:});
+    res.rows_contrast = regnames;
 end
 
 ncon = model(1).npredictors;
@@ -71,12 +79,13 @@ res.cols_roi = epivol.meta.features.names;
 
 % custom voodoo
 for c = 1:ncustom
-    res.custom{c,1} = feval(customfun{c},model);
+    res.custom{c,1} = feval(customfun{c},model,res.rows_contrast);
 end
 
 % permutation p values
 pind = feval(permprep,model,nperm);
-% NB we permute T here to be concordant with the sign flip method in % roidata_rfx. And because we typically want to threshold T maps anyway.
+% NB we permute T here to be concordant with the sign flip method in %
+% roidata_rfx. And because we typically want to threshold T maps anyway.
 % but for now also b so we can just cat in the slope/contrasts etc (it's
 % difficult to calculate t values for these)
 [nulldist.b] = feval(permmeth,model,pind,'contrast',[],eyecon);
