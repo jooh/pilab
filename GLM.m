@@ -293,19 +293,20 @@ classdef GLM < Saveable
             res = matmean(splitres{:});
         end
 
-        function res = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs)
+        function varargout = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs)
         % one-way classification: train some classifier on a training split
         % of self (self(~split)) using trainmeth with trainargs{:}. Then
         % validate the classifier predictions on a test split (self(split))
         % using testmeth with testargs{:}. Mainly useful for custom
         % splitting schemes where you don't want to crossvalidate (ie use
-        % all data both for training and prediction).
+        % all data both for training and prediction). Note that we support
+        % any number of returns (e.g. both t and p for infot)
         %
-        % res = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs)
+        % varargout = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs)
             train = self(~split);
             test = self(split);
             tfit = feval(trainmeth,train,trainargs{:});
-            res = feval(testmeth,test,tfit,testargs{:});
+            [varargout{1:nargout}] = feval(testmeth,test,tfit,testargs{:});
         end
 
         function model = drawpermruns(self,runinds)
@@ -691,20 +692,26 @@ classdef GLM < Saveable
             model = GLM(X,dataw);
         end
 
-        function [t,model] = infot(self,w,conmat)
+        function [t,p,model] = infot(self,w,conmat)
         % return t estimates for contrasts conmat computed on the
         % infomodel(self,w). The resulting t summarises the strength of the
         % pattern information effect for each contrast (ie, the mean
         % distance from the linear discriminant decision boundary
         % normalised by the variance of said distance).
         %
-        % [t,model] = infot(self,w,conmat)
+        % [t,p,model] = infot(self,w,conmat)
             model = infomodel(self,w);
             % diag to get each contrast's estimate on its own discriminant
             % feature.
             cons = diag(contrast(model,conmat));
             errs = diag(standarderror(model,conmat));
             t = cons ./ errs;
+            if nargout>1
+                % 1-tailed p value
+                % extra conversion here because larger single-precision t
+                % stats tend to get rounded to 1 (ie, 0).
+                p = 1-tcdf(double(t),df(model));
+            end
         end
 
         function mahdist = infoc(self,w,conmat)
