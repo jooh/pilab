@@ -40,6 +40,8 @@ if ieNotDefined('v')
         madeview = true;
     end
 end
+thisgroup = viewGet(v,'groupnum',group);
+assert(~isempty(thisgroup),'could not find group %s',group);
 
 % easy peasy
 epivol = MrToolsVolume(v,mask,'group',group,'scans',scans);
@@ -47,9 +49,10 @@ epivol = MrToolsVolume(v,mask,'group',group,'scans',scans);
 if checkframe
     for s = 1:epivol.desc.samples.nunique.chunks
         thisscan = epivol.desc.samples.unique.chunks(s);
-        stimfile = viewGet(v,'stimfile',thisscan);
+        stimfile = viewGet(v,'stimfile',thisscan,thisgroup);
         volEvents = find(stimfile{1}.myscreen.events.tracenum == 1);
-        volTrigRatio = viewGet(v,'auxParam','volTrigRatio',thisscan);
+        volTrigRatio = cell2mat(viewGet(v,...
+            'auxParam','volTrigRatio',thisscan,thisgroup));
         frameperiod(s) = median(diff(...
             stimfile{1}.myscreen.events.time(volEvents))) / volTrigRatio;
     end
