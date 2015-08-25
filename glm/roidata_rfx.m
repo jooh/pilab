@@ -1,6 +1,7 @@
 % do a random effects analysis on the data in struct array subres (one
-% entry per subject). Makes various assumptions about how subres is
-% organised - see roidata_rsa and roidata_glm for reference.
+% entry per subject, or a single entry 'groupres' where subjects are
+% stacked in third dimension). Makes various assumptions about how subres
+% is organised - see roidata_rsa and roidata_glm for reference.
 %
 % Named inputs:
 % nperm: 1 
@@ -34,6 +35,9 @@
 %   contain custom settings that determine funhand's behavior:
 %       groupres.(targetfield)(end+1,:,:) = customfits(c).funhand(...
 %       groupres.(targetfield)(conind,:,:),customfits(c));
+% customfun: catch-all custom processing. Gets called as 
+%       meanres.custom{nc,r} = feval(customfun{nc},roidata(:,:,r),...
+%           meanres.rows_contrast);
 %
 % [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,[varargin])
 function [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,varargin)
@@ -42,57 +46,74 @@ getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','r','transfun',[],...
     'assumeregister',false,'varsmoothmask',[],'varsmoothfwhm',8,...
     'contrasts',emptystruct('name','conplus','conminus','tail'),...
     'customfits',emptystruct('name','funhand','cons','tail'),'minn',2,...
-    'keepnans',false,'multpdim','roi'});
+    'keepnans',false,'multpdim','roi','customfun',[]});
 
 % we assume that contrasts are identical.  we could support
 % this case in theory but let's not for now since it likely
 % indicates a user error.
 concell = {subres.rows_contrast};
-assert(isequal(concell{:}),...
+assert(isequal(concell{1},concell{:}),...
     'different predictors in different subjects');
-concell = concell{1};
-ncon = length(concell);
+ncon = length(concell{1});
 
-if assumeregister
-    % just take rois from first subject
-    urois = subres(1).cols_roi;
-else
-    % find all possible ROIs (not all subjects will have all ROIs
-    % necessarily)
-    allrois = {subres.cols_roi};
-    allrois = horzcat(allrois{:});
-    urois = unique(allrois);
+if ~iscell(customfun)
+    if isempty(customfun)
+        customfun = {};
+    else
+        customfun = {customfun};
+    end
 end
-nroi = length(urois);
-nsub = length(subres);
-dat = NaN([ncon nroi nsub]);
-groupres = struct('rows_contrast',{subres(1).rows_contrast},...
-    'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]),...
-    'tail',{subres(1).tail});
+ncustom_rfx = numel(customfun);
 
-% populate the groupres struct
+isgroupres = false;
+nsub = length(subres);
 targets = intersect(fieldnames(subres),...
     {targetfield,'pperm','ppara','medianboot','medianste',...
     'nfeatures','tail'});
-if assumeregister
-    % hey, this is easy
-    groupres = collapsestruct(subres,@zcat);
-    assert(~any(isnan(groupres.(targetfield)(:))),...
-        'nans in targetfield not supported in assumeregister mode');
+if numel(subres)==1 && isfield(subres,'z_subject')
+    % groupres mode
+    isgroupres = true;
+    groupres = subres;
+    names = groupres.z_subject;
 else
-    % have to be careful not to average over different rois
-    for s = 1:nsub
-        for r = 1:length(subres(s).cols_roi)
-            thisroi = subres(s).cols_roi{r};
-            indroi = strcmp(groupres.cols_roi,thisroi);
-            for t = targets(:)'
-                tstr = t{1};
-                if strcmp(tstr,'tail')
-                    assert(isequal(groupres.tail,subres.tail),...
-                        'mismatched tails across subjects');
-                else
-                    groupres.(tstr)(:,indroi,s) = ...
-                        subres(s).(tstr)(:,r);
+    names = {subres.name};
+    if assumeregister
+        % just take rois from first subject
+        urois = subres(1).cols_roi;
+    else
+        % find all possible ROIs (not all subjects will have all ROIs
+        % necessarily)
+        allrois = {subres.cols_roi};
+        allrois = horzcat(allrois{:});
+        urois = unique(allrois);
+    end
+    nroi = length(urois);
+    dat = NaN([ncon nroi nsub]);
+    groupres = struct('rows_contrast',{subres(1).rows_contrast},...
+        'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]),...
+        'tail',{subres(1).tail});
+
+    % populate the groupres struct
+    if assumeregister
+        % hey, this is easy
+        groupres = collapsestruct(subres,@zcat);
+        assert(~any(isnan(groupres.(targetfield)(:))),...
+            'nans in targetfield not supported in assumeregister mode');
+    else
+        % have to be careful not to average over different rois
+        for s = 1:nsub
+            for r = 1:length(subres(s).cols_roi)
+                thisroi = subres(s).cols_roi{r};
+                indroi = strcmp(groupres.cols_roi,thisroi);
+                for t = targets(:)'
+                    tstr = t{1};
+                    if strcmp(tstr,'tail')
+                        assert(isequal(groupres.tail,subres.tail),...
+                            'mismatched tails across subjects');
+                    else
+                        groupres.(tstr)(:,indroi,s) = ...
+                            subres(s).(tstr)(:,r);
+                    end
                 end
             end
         end
@@ -219,11 +240,11 @@ if isfield(groupres,'custom')
 end
 nroi = size(groupres.(targetfield),2);
 ncon = numel(groupres.rows_contrast);
-groupres.z_subject = {subres.name};
+groupres.z_subject = names;
 
 % now we can get the mean struct 
 meanres = struct('rows_contrast',{groupres.rows_contrast},...
-    'cols_roi',{groupres.cols_roi},'z_subject',{{subres.name}});
+    'cols_roi',{groupres.cols_roi},'z_subject',{names});
 meanres.tail = tail;
 meanres.mean = nanmean(groupres.(targetfield),3);
 meanres.n = sum(~isnan(groupres.(targetfield)),3);
@@ -435,6 +456,14 @@ if nperm > 1 || nboot > 0
                 meanres.medianste(:) = NaN;
             end
         end
+    end
+end
+
+% do the customs as well
+for nc = 1:ncustom_rfx
+    for r = 1:nroi
+        meanres.custom{nc,r} = feval(customfun{nc},roidata(:,:,r),...
+            meanres.rows_contrast);
     end
 end
 
