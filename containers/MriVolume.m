@@ -35,11 +35,19 @@ classdef MriVolume < Volume
             if ieNotDefined('data')
                 data = {[]};
             end
+            if ieNotDefined('mask')
+                mask = [];
+            end
             % instance from Base class
             mrivol = mrivol@Volume(data,varargin{:});
             % then any non-base class inputs
             getArgs(varargin,{'header',[],'voxsize',[]},'verbose=0',...
                 'suppressUnknownArgMessage=1');
+            if isa(data,'MriVolume')
+                mask = setifunset(mask,data.mask,true);
+                header = setifunset(header,data.header);
+                voxsize = setifunset(voxsize,data.voxsize);
+            end
             if isa(mask,'MriVolume')
                 % interesting!
                 header = setifunset(header,mask.header,true);
@@ -114,6 +122,13 @@ classdef MriVolume < Volume
             self.voxsize);
         end
 
+        function vol = copy(self,dat,meta)
+            % may have to update mask as in subsref below
+            vol = feval(class(self),dat,self.mask,meta,'header',...
+                self.header,'voxsize',self.voxsize,...
+                'frameperiod',self.frameperiod);
+        end
+
         function varargout = subsref(self,s)
         % overloading of round bracket operator.
         % varargout = subsref(self,s)
@@ -130,7 +145,7 @@ classdef MriVolume < Volume
                         mask(self.linind(s.subs{2})) = 1;
                     end
                     % make a new instance
-                    varargout{1} = MriVolume(dat,mask,'meta',meta,...
+                    varargout{1} = feval(class(self),dat,mask,'meta',meta,...
                         'header',self.header,'voxsize',self.voxsize,...
                         'frameperiod',self.frameperiod);
                 otherwise
@@ -146,8 +161,12 @@ classdef MriVolume < Volume
 
         function o = horzcat(varargin)
         % o = horzcat(varargin)
-            error(['concatenation in feature dimension is not ' ...
-                'supported for MriVolume classes']);
+            if nargin==1
+                o = varargin{1};
+            else
+                error(['concatenation in feature dimension is not ' ...
+                    'supported for MriVolume classes']);
+            end
         end
     end
 end
