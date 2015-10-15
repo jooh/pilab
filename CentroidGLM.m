@@ -11,14 +11,6 @@ classdef CentroidGLM < GLM
             end
             % initialise with super class
             gl = gl@GLM(X,data);
-            % sub-class support
-            %if nargin>0
-                %% remove the mean across features
-                %gl.data = bsxfun(@minus,data,mean(data,2));
-                %% obtain the prediction across time for the mean
-                %% filter mean pattern feature dimension
-                %gl.data = projectout(gl.data',mean(gl.data,1)')';
-            %end
         end
 
         function con = contrast(self,conmat)
