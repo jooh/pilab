@@ -670,7 +670,10 @@ classdef GLM < Saveable
             sa = covdiag(residuals(self));
             varargout = cell(1,nargout);
             for n = 1:length(varargout)
-                varargout{n} = contrast(self,varargin{n}) / sa;
+                % unit length transform each weight vector to ensure
+                % discriminant outputs are in test data units.
+                varargout{n} = unitlen(...
+                    (contrast(self,varargin{n}) / sa)')';
             end
         end
 
@@ -729,12 +732,7 @@ classdef GLM < Saveable
             % time course (but unlike infot, there's no division by
             % standard error).
             c = contrast(self,conmat);
-            % we use a signed sqrt transform because negative statistics
-            % produce imaginary numbers if you are using a mahalanobis
-            % classifier (ie weights from independent data). Note that in
-            % some cases you may wish to preserve squared values instead
-            % (e.g. for pattern component analysis)
-            mahdist = sqrtsigned(diag(c * w'));
+            mahdist = diag(c * w');
         end
 
         function d = preallocate(self,shape)
