@@ -10,11 +10,11 @@
 % covariatedeg      'adaptive'  degree of polynomial detrend (0:n).
 %                                   'adaptive' means we find a value using
 %                                   vol2covdeg
-% domedianfilter      false       medianfilter the data over time
+% domedianfilter    false       medianfilter the data over time
 % sgdetrend         false       Savitzky-Golay detrend the data over time
 % sgolayK           NaN         parameter for Savitzky-Golay detrend
 % sgolayF           NaN         parameter for Savitzky-Golay detrend
-% dozscore            false       zscore the data over time
+% dozscore          false       zscore the data over time
 % targetlabels      []          cell array containing names for any labels
 %                                   in designvol to select (keep all if
 %                                   isempty)
@@ -23,7 +23,7 @@
 % setclass          []          convert all data to specified class
 % resortind         []          resort the order of designvol according to
 %                                   these numerical indices
-% percentsignal false           if true, convert data to % signal change
+% percentsignal     false       if true, convert data to % signal change
 %                                   and scale peak of design matrix to 1.
 %                                   Note that this doesn't perfectly work
 %                                   for rapid ER designs.
