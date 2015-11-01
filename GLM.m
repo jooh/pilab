@@ -717,22 +717,36 @@ classdef GLM < Saveable
             end
         end
 
-        function mahdist = infoc(self,w,conmat)
-        % return the mahalonobis distance (ie, the mean distance from the
-        % linear discriminant decision boundary in standard deviation
-        % units) between the contrasts in conmat computed on the contrast
-        % from the test dataset.
+        function dist = infoc(self,w,conmat)
+        % linear discriminant contrast estimate - ie, the distance between
+        % the contrasted conditions along the discriminant dimension. 
         %
-        % mahdist = infoc(self,w,conmat)
-            
+        % Note that the units of the data are only preserved if the weights
+        % vector is set to unit length and the contrast vector's absolute
+        % values from the positive and negative elements of each contrast
+        % both sum to 1.
+        %
+        % If a full covariance estimate is used to calculate the linear
+        % discriminant and this method is called on the same data that was
+        % used to form the discriminant, the returned value is the
+        % Mahalanobis distance.
+        %
+        % INPUTS
+        % w         weights vector, see GLM.discriminant
+        % conmat    n by npredictors contrast matrix.
+        %
+        % OUTPUT
+        % dist      n by 1 distance estimates
+        %
+        % dist = infoc(self,w,conmat)
+            c = contrast(self,conmat);
             % we're going to project the contrast estimates from the test
             % data onto the discriminant weights. Note that this is
             % equivalent to projecting the time courses onto the weights
             % and then calculating a contrast on the resulting discriminant
             % time course (but unlike infot, there's no division by
             % standard error).
-            c = contrast(self,conmat);
-            mahdist = diag(c * w');
+            dist = diag(c * w');
         end
 
         function d = preallocate(self,shape)
