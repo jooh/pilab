@@ -86,16 +86,18 @@ classdef ROIProcessor < MetaProcessor
                     metafeatures,'metasamples',metasamples);
             else
                 % This is slow so only do this for non-search vols
-                [metafeatures.com_x,metafeatures.com_y,...
-                    metafeatures.com_z] =...
-                    deal(NaN([1 self.rois.nsamples]));
-                for c = 1:self.rois.nsamples
-                    % compute centre of mass for this ROI
-                    coords = round(mean(self.rois.linind2coord(...
-                        self.rois.linind(self.rois.data(c,:)~=0)),2));
-                    metafeatures.com_x(c) = coords(1);
-                    metafeatures.com_y(c) = coords(2);
-                    metafeatures.com_z(c) = coords(3);
+                if isfield(self.rois,'linind')
+                    [metafeatures.com_x,metafeatures.com_y,...
+                        metafeatures.com_z] =...
+                        deal(NaN([1 self.rois.nsamples]));
+                    for c = 1:self.rois.nsamples
+                        % compute centre of mass for this ROI
+                        coords = round(mean(self.rois.linind2coord(...
+                            self.rois.linind(self.rois.data(c,:)~=0)),2));
+                        metafeatures.com_x(c) = coords(1);
+                        metafeatures.com_y(c) = coords(2);
+                        metafeatures.com_z(c) = coords(3);
+                    end
                 end
                 % make a headerless volume 
                 roivol = Volume(result,'metafeatures',...
