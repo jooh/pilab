@@ -133,15 +133,19 @@ classdef SPMVolume < MriVolume
 
             % note that we append the additional arguments needed for
             % MriVolume
-            args = {'header',header,'voxsize',voxsize};
-            args = [args {remargs{:}}];
+            if ~any(strcmp(remargs,'header'))
+                remargs = [remargs,{'header',header}];
+            end
+            if ~any(strcmp(remargs,'voxsize'))
+                remargs = [remargs,{'voxsize',voxsize}];
+            end
             if ~isempty([fieldnames(temp.meta.features); fieldnames(temp.meta.samples)])
                 % only add meta input if we put anything in it. (this is to
                 % hack around the current lack of support for entering both
                 % meta and metasamples/metafeatures)
-                args = [args {'meta',temp.meta}];
+                remargs = [remargs,{'meta',temp.meta}];
             end
-            spmvol = spmvol@MriVolume(outdata,mask,args{:});
+            spmvol = spmvol@MriVolume(outdata,mask,remargs{:});
 
             % frameperiod is set at Volume level, but here we just check
             % that it matches our estimate
