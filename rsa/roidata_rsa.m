@@ -44,6 +44,7 @@
 %   contain custom settings that determine funhand's behavior:
 %       res.r(end+1,:,:) = customfits(c).funhand(...
 %       res.r(conind,:,:),customfits(c));
+% name: string for subject ID (goes into res.name)
 %
 % [res,nulldist,bootdist] = roidata_rsa(disvol,predictors,[varargin])
 function [res,nulldist,bootdist] = roidata_rsa(disvol,predictors,varargin)
@@ -55,7 +56,7 @@ getArgs(varargin,{'rsaclass','RankRSA','nperm',1,'nboot',0,...
     'customfun',[],'defaulttail','right',...
     'contrasts',emptystruct('name','conplus','conminus','tail'),...
     'customfits',emptystruct('name','funhand','cons','tail'),...
-    'permdis',[]});
+    'permdis',[],'name',''});
 
 if ~iscell(rsaclassargs)
     % this extra bit of flexibility helps with cases where you just want to
@@ -113,7 +114,7 @@ rows_contrast = {ascol({predictors.name})};
 dismat = cellfun(@(thisdis)thisdis.data,disvol,'uniformoutput',0);
 
 res = struct('cols_roi',cols_roi,'rows_contrast',rows_contrast,...
-    'r',basedat);
+    'r',basedat,'name',name);
 
 if isfield(disvol{1}.meta.features,'nfeatures')
     res.nfeatures = disvol{1}.meta.features.nfeatures;
@@ -284,6 +285,7 @@ end
 if nboot > 0
     [res.medianboot,res.medianste] = bootprctile(bootdist.r);
 end
+
 
 function [r,model] = constructandfit(dismat,zind,predictor,constructor,args,fitmeth,fitmethargs)
 
