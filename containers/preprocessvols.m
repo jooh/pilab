@@ -61,6 +61,7 @@ if matchn
 end
 
 if percentsignal
+    logstr('scaling data to percent signal change\n');
     % scale epi by 100 * mean per voxel
     filterbychunk(epivol,@(x)100*bsxfun(@rdivide,x,mean(x)));
     % scale design matrix by global max (so the peak across the design
