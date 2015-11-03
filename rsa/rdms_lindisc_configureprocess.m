@@ -34,7 +34,6 @@ else
     testmeth = 'infoc';
 end
 if returnp
-    assert(strcmp(testmeth,'infot'));
     nreturn = 2;
 end
 logstr('testmeth: %s\n',testmeth);
