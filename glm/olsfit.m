@@ -20,11 +20,15 @@ if isequal(olsfit_cache_X,X) && isequal(olsfit_cache_Y,Y)
     return;
 end
 lastwarn('')
-% nb slightly different formulation from the stock X \ Y - this is faster
-% for large Ys.
-% also, mtimescell - save memory by fitting each entry in the cell array Y
-% separately
-betas = mtimescell((X'*X)\X',Y);
+
+% this approach is from Kendrick's mtimescell
+Xt = (X'*X)\X';
+betas = zeros([size(X,2),size(Y{1},2)],'like',Y{1});
+cnt = 0;
+for q=1:length(Y)
+    betas = betas + Xt(:,cnt + (1:size(Y{q},1))) * Y{q};
+    cnt = cnt + size(Y{q},1);
+end
 assert(isempty(lastwarn),'rank deficient fit');
 olsfit_cache_X = X;
 olsfit_cache_Y = Y;
