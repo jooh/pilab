@@ -11,7 +11,7 @@ getArgs(varargin,{'glmclass','GLM','nperm',1,'nboot',0,...
     'bootmeth','bootstrapruns','bootprep','preparerunboots',...
     'permmeth','permuteruns','permprep','preparerunperms',...
     'customfits',emptystruct('name','funhand','cons','tail'),...
-    'regnames',''});
+    'regnames','','name',''});
 
 if ~iscell(glmclassargs)
     % this extra bit of flexibility helps with cases where you just want to
@@ -51,6 +51,7 @@ ncon = model(1).npredictors;
 
 eyecon = eye(model(1).npredictors,class(model(1).data));
 
+res.name = name;
 % Get the basic estimates (nb we don't just fit directly because in some
 % sub-classes the output transform only happens at this level).
 res.b = contrast(model,eyecon);
@@ -79,7 +80,7 @@ res.cols_roi = epivol.meta.features.names;
 
 % custom voodoo
 for c = 1:ncustom
-    res.custom{c,1} = feval(customfun{c},model,res.rows_contrast);
+    res.custom{c,1} = feval(customfun{c},model);
 end
 
 % permutation p values
@@ -189,6 +190,7 @@ end
 if nboot > 0
     [res.medianboot,res.medianste] = bootprctile(bootdist.b);
 end
+
 
 function res = fitslope(data,customfit)
 
