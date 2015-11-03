@@ -695,14 +695,17 @@ classdef GLM < Saveable
             model = GLM(X,dataw);
         end
 
-        function [t,p,model] = infot(self,w,conmat)
+        function [t,p] = infot(self,w,conmat)
         % return t estimates for contrasts conmat computed on the
         % infomodel(self,w). The resulting t summarises the strength of the
         % pattern information effect for each contrast (ie, the mean
         % distance from the linear discriminant decision boundary
         % normalised by the variance of said distance).
         %
-        % [t,p,model] = infot(self,w,conmat)
+        % if the second output (p) is requested we obtain a parametric p
+        % value for the t statistic.
+        %
+        % [t,p] = infot(self,w,conmat)
             model = infomodel(self,w);
             % diag to get each contrast's estimate on its own discriminant
             % feature.
@@ -717,13 +720,16 @@ classdef GLM < Saveable
             end
         end
 
-        function mahdist = infoc(self,w,conmat)
+        function [mahdist,p] = infoc(self,w,conmat)
         % return the mahalonobis distance (ie, the mean distance from the
         % linear discriminant decision boundary in standard deviation
         % units) between the contrasts in conmat computed on the contrast
         % from the test dataset.
         %
-        % mahdist = infoc(self,w,conmat)
+        % if the second output (p) is requested we obtain a parametric p
+        % value using infot.
+        %
+        % [mahdist,p] = infoc(self,w,conmat)
             
             % we're going to project the contrast estimates from the test
             % data onto the discriminant weights. Note that this is
@@ -733,6 +739,10 @@ classdef GLM < Saveable
             % standard error).
             c = contrast(self,conmat);
             mahdist = diag(c * w');
+            if nargout > 1
+                % obtain p value by t test
+                [~,p] = infot(self,w,conmat);
+            end
         end
 
         function d = preallocate(self,shape)
