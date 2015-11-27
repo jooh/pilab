@@ -71,6 +71,12 @@ classdef RSA < GLM
             r = getdata(self) - prediction;
         end
 
+        function fullr = withnans(self,r)
+            fullr = NaN([size(self(1).validvec,1) size(r,2)],class(r));
+            fullr(repmat(self(1).validvec,[1 size(r,2)])) = r;
+        end
+
+
         function fullr = residualsfull(self,varargin)
         % The RSA class always removes NaNs before fitting, so the standard
         % residuals function may not return a valid rdvec. This function
@@ -79,9 +85,17 @@ classdef RSA < GLM
         %
         % r = residualsfull(self,varargin)
             r = residuals(self,varargin{:});
-            fullr = NaN([size(self(1).validvec,1) self(1).nfeatures],...
-                class(r));
-            fullr(repmat(self(1).validvec,[1 self(1).nfeatures])) = r;
+            fullr = withnans(self,r);
+        end
+
+        function fully = predictYfull(self,varargin)
+            y = predictY(self,varargin{:});
+            fully = withnans(self,y);
+        end
+
+        function fulldata = getdatafull(self,varargin)
+            data = getdata(self,varargin{:});
+            fulldata = withnans(self,data);
         end
 
         function tau = kendall_a(self,Yfit)
