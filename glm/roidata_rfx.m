@@ -341,7 +341,9 @@ if nperm > 1 || nboot > 0
             design = ones([meanres.n(c,1),1],class(roidata));
             assert(numel(unique(meanres.n(c,:)))==1,...
                 'n must be the same for all ROIs to use assumeregister');
-            model = GLM(design,squeeze(roidata(:,c,:)));
+            % avoid squeeze to prevent weird behaviours
+            model = GLM(design,reshape(roidata(:,c,:),[size(roidata,1) ...
+                size(roidata,3)]));
 
             % permutation test
             if nperm > 1
@@ -429,9 +431,10 @@ if nperm > 1 || nboot > 0
                 innull = indexdim(nulldist.(targetfield),c,fwedim);
                 meanres.pperm(outind) = permpvalue(innull,tail{c});
                 % unlike pperm, pfweperm needs matrix input
-                if ~ismatrix(innull)
-                    innull = squeeze(innull);
-                end
+                % so remove the fwedim, while avoiding squeeze
+                sz = size(innull);
+                sz(fwedim) = [];
+                innull = reshape(innull,sz);
                 meanres.pfweperm(outind) = permpfwe(innull,...
                     tail{c});
             end
