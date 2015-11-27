@@ -11,7 +11,9 @@
 % targetfields  {'x','y','pupil'}   select data channels for import.
 % demean        false           de-mean each run
 % downperiod    []              downsample signal to this rate
-% removerunthresh   .1          remove runs with more than this much
+% removerunthresh   .25         remove runs with more than this much
+%                                   missing data
+% removetrialthresh     .5      remove trials with more than this much
 %                                   missing data
 % screenlims    d.myscreen.displaySize/2 rescore data outside these lims as
 %                                   missing
@@ -29,8 +31,8 @@ function [eyevol,designvol] = mreyelink2vol(stimfiles,varname,dur,varargin)
 
 getArgs(varargin,{'taskNum',1,'phaseNum',1,'segmentNum',1,...
     'removeBlink',.15,'dataPad',3,'targetfields',[],'demean',false,...
-    'downperiod',[],'removerunthresh',.1,'screenlims',[],...
-    'scans',[],'ignorelabels',[]});
+    'downperiod',[],'removerunthresh',.25,'removetrialthresh',.5,...
+    'screenlims',[],'scans',[],'ignorelabels',[]});
 
 % parse input
 if isview(stimfiles)
@@ -85,6 +87,8 @@ for r = 1:nrun
     dodownsample = ~isempty(downperiod) && downperiod~=frameperiod;
     nsamples = round(dur/frameperiod);
     [ntrials,npossiblesamples] = size(t.eye.xPos);
+    % keep track of bad trials (missing data or ignorelabels)
+    badrows = false([ntrials,1]);
     assert(nsamples <= npossiblesamples,'not enough samples for dur');
 
     % rescore data outside screen edges as missing
@@ -94,7 +98,7 @@ for r = 1:nrun
     t.eye.yPos(outsideind) = NaN;
     t.eye.pupil(outsideind) = NaN;
 
-    % keep track of how much we're missing
+    % keep track of how much we're missing per run
     pmissing = sum(asrow(isnan(t.eye.xPos(:,1:nsamples)))) ./ ...
         numel(t.eye.xPos(:,1:nsamples));
     if pmissing > removerunthresh
@@ -132,6 +136,14 @@ for r = 1:nrun
 
         % extract means before interpolation, but after downsampling
         data.means(rc).(outfnstr) = nanmean(data.raw(rc).(outfnstr),2);
+        
+        % update badrows with trials that have too much missing data
+        % (suggesting interpolation can't be trusted)
+        % (but note that we keep it in for now because it's easier to just
+        % do all the bad data removal at once at the end)
+        pmissing = sum(isnan(data.raw(rc).(outfnstr)),2) ./ ...
+            size(data.raw(rc).(outfnstr),2);
+        badrows = badrows | pmissing > removetrialthresh;
 
         % do the interpolation (transpose since interpolatemissing works on
         % rows not columns)
@@ -167,7 +179,7 @@ for r = 1:nrun
     end
     vardata = d.(varname);
     if ~isempty(ignorelabels)
-        badrows = vardata == ignorelabels;
+        badrows = badrows | vardata' == ignorelabels;
         vardata(badrows) = [];
         for fn = fieldnames(data.raw)'
             fnstr = fn{1};
