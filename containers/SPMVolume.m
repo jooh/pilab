@@ -67,13 +67,13 @@ classdef SPMVolume < MriVolume
                     filenames = [filenames; {dV.fname}'];
                 elseif isa(thisdata,'SPMVolume')
                     % interesting! 
-                    if ~isempty(header,'mat')
+                    if ~isempty(header)
                         assert(spm_check_orientations(...
                             [thisdata.header; header]),...
                             'data header does not match mask');
                     end
                     datamat = thisdata.data;
-                    temp.meta = updatemeta(temp.meta,thisdata.meta);
+                    temp.meta = Volume.updatemeta(temp.meta,thisdata.meta);
                     % also bring along the mask if possible and needed
                     mask = setifunset(mask,thisdata.mask,true);
                     header = setifunset(header,thisdata.header);
