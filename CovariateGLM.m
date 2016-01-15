@@ -1,12 +1,17 @@
+% GLM sub-class where a set of covariates are projected out of data and
+% design matrix prior to fitting. 
+%
+% Mainly useful when the number of covariates might vary (e.g., ncovtouse
+% is a free parameter tuned with crossvalidateproperty as part of
+% GLMdenoise-like fits), or when the design matrix is convolved on the fly
+% (see ConvGLM sub-class).
+%
+% model = CovariateGLM(X,data,covariates)
 classdef CovariateGLM < GLM
     properties
         covariates
         ncovariates
         ncovtouse
-        Xcovcache
-        Xcovcachen = NaN
-        datacovcache
-        datacovcachen = NaN
     end
 
     methods
@@ -25,47 +30,27 @@ classdef CovariateGLM < GLM
         function data = getdatac(self)
             nrun = numel(self);
             % filter each run separately to preserve independence
+            data = cell(nrun,1);
             for r = 1:nrun
-                if self(r).ncovtouse ~= self(r).datacovcachen
-                    % covariates changed so need to re-calculate projection
-                    self(r).datacovcache = ...
-                        getprojectionmatrix(self(r)) * self(r).data;
-                    self(r).datacovcachen = self(r).ncovtouse;
-                end
+                data{r} = getprojectionmatrix(self(r)) * ...
+                    self(r).data;
             end
-            data = {self.datacovcache};
         end
 
         function X = getdesign(self)
             nrun = numel(self);
+            Xcovcache = cell(nrun,1);
             for r = 1:nrun
-                if self(r).ncovtouse ~= self(r).Xcovcachen
-                    self(r).Xcovcache = getprojectionmatrix(self(r)) * ...
-                        self(r).X;
-                    self(r).Xcovcachen = self(r).ncovtouse;
-                end
+                Xcovcache{r} = getprojectionmatrix(self(r)) * ...
+                    self(r).X;
             end
-            X = vertcat(self.Xcovcache);
+            X = vertcat(Xcovcache{:});
         end
 
         function pmat = getprojectionmatrix(self)
             assert(numel(self)==1,['covariates should be processed ' ...
                 'separately for each run']);
             pmat = projectionmatrix(self.covariates(:,1:self.ncovtouse));
-        end
-
-        function model = drawpermsample(self,inds)
-            model = drawpermsample@GLM(self,inds);
-            % clear the cache to prevent inaccurate filtering
-            [model.Xcovcachen] = deal(NaN);
-            [model.datacovcachen] = deal(NaN);
-        end
-
-        function model = drawpermflipsample(self,inds)
-            model = drawpermflipsample(self,inds);
-            % clear the cache to prevent inaccurate filtering
-            [model.Xcovcachen] = deal(NaN);
-            [model.datacovcachen] = deal(NaN);
         end
     end
 end
