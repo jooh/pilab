@@ -3,9 +3,6 @@
 % discriminant for each ROI and compute some discriminant dissimilarity
 % measure. 
 %
-% Historically, this used to wrap roidata2rdmvol_lindisc, but it
-% now uses Process-based compute instead.
-%
 % INPUTS:
 % rois: some SPMVolume instance with rois in the sample dimension (rows)
 % designvol: some Volume instance (the RDM will have
@@ -34,9 +31,10 @@
 %   rois.nsamples must equal rois.nfeatures and epivol.nfeatures (default
 %   false)
 % nperms: number of permutations to use for permuteruns (default 0)
+% ntrials: only used for ConvGLM, where it's numel(conind)
 %
-% [disvol,splitdisvolcell,permres,sesspermres] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
-function [disvol,splitdisvolcell,permres,sesspermres] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
+% function [disvol,permres,splitdisvolcell,sesspermres] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
+function [disvol,permres,splitdisvolcell,sesspermres] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
 
 getArgs(varargin,{'split',[],'glmvarargs',{},'cvsplit',[],...
     'glmclass','GLM','sterrunits',0,'crossvalidate',1,...
@@ -49,12 +47,16 @@ if isempty(cvsplit)
     assert(isempty(split),'cvsplit must be provided if split is defined');
 end
 
+ntrials = NaN;
+if isa(designvol,'DesignSpec')
+    ntrials = numel(designvol.data(1).conind);
+end
 glman_rdm = rdms_lindisc_configureprocess('glmclass',glmclass,...
     'glmvarargs',...
     glmvarargs,'cvsplit',cvsplit,'sterrunits',sterrunits,...
     'crossvalidate',crossvalidate,'crosscon',crosscon,'ncon',...
     designvol.nfeatures,'setclass',class(epivol.data),'demean',demean,...
-    'nperms',nperms,'onewayvalidation',onewayvalidation);
+    'nperms',nperms,'onewayvalidation',onewayvalidation,'ntrials',ntrials);
 
 if isfield(epivol,'xyz')
     % support non-MriVolumes
@@ -81,7 +83,7 @@ if isempty(split)
     split = ones(epivol.desc.samples.nunique.chunks,1);
 end
 
-if nargout>1
+if nargout>2
     % split the data into appropriately pre-processed cell arrays
     [designcell,epicell] = splitvol(split,designvol,epivol);
     nsplit = length(designcell);
@@ -110,8 +112,10 @@ if nargout>1
 else
     % can just build everything into one processor. This tends to be faster
     % because it puts more processing inside each parfor job.
-    glman_rdm_split = SessionProcessor(split,glman_rdm);
-    sl = ROIProcessor(rois,glman_rdm_split,minn,runfun);
+    if unique(split)>1
+        glman_rdm = SessionProcessor(split,glman_rdm);
+    end
+    sl = ROIProcessor(rois,glman_rdm,minn,runfun);
     logstr('running all rois... ')
     tstart = clock;
     permres = call(sl,epivol.data,designvol.data,...
@@ -125,7 +129,7 @@ meanresult = permres(:,:,1);
 % create output volume(s)
 disvol = result2roivol(sl,meanresult,searchvol);
 
-if nargout>1
+if nargout>2
     for sp = 1:nsplit
         % make sure nans are consistent
         sesspermres{sp}(:,anynan,:) = NaN;

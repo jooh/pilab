@@ -3,7 +3,8 @@ function glman_rdm = rdms_lindisc_configureprocess(varargin)
 getArgs(varargin,{'glmvarargs',{},'cvsplit',[],...
     'glmclass','GLM','sterrunits',0,'crossvalidate',true,...
     'crosscon',[],'ncon',[],'setclass','double','demean',false,...
-    'nperms',0,'onewayvalidation',false,'returnp',false});
+    'nperms',0,'onewayvalidation',false,'returnp',false,...
+    'ntrials',NaN});
 
 if ~iscell(glmvarargs)
     if isempty(glmvarargs)
@@ -40,16 +41,29 @@ logstr('testmeth: %s\n',testmeth);
 
 % assemble processors
 glmspec = GLMConstructor(glmclass,cvsplit,glmvarargs{:});
+permmeth = 'permuteruns';
 
+if strcmp(glmclass,'ConvGLM')
+    glmspec = ConvGLMConstructor(cvsplit);
+    permmeth = 'permutesamples';
+end
 
 nrun = numel(cvsplit);
 if nperms > 1
-    assert(~isempty(cvsplit),['cvsplit must be defined for ' ...
-        'permutation test']);
-    % bit hacky but there's no telling how many runs we will have
-    % at this stage.
-    % Note that this solution isn't exactly bullet proof.
-    pind = permuteindices(nrun,nperms);
+    switch permmeth
+        case 'permuteruns'
+            assert(~isempty(cvsplit),['cvsplit must be defined for ' ...
+                'permutation test']);
+            % bit hacky but there's no telling how many runs we will have
+            % at this stage.
+            % Note that this solution isn't exactly bullet proof.
+            pind = permuteindices(nrun,nperms);
+        case 'permutesamples'
+            % hm.
+            pind = permuteindices(ntrials,nperms);
+        otherwise
+            error('unknown permmeth: %s',permmeth)
+    end
 end
 
 if isempty(crosscon)
@@ -65,17 +79,16 @@ if isempty(crosscon)
             % second test.
             assert(nrun==2,['only 2 runs for validatedclassification ' ...
                 'first train, second test']);
-            assert(nperms<2,['permutation tests are problematic for ' ...
-                'validatedclassification']);
-            args = {[false,true],'discriminant',{cons},testmeth,{cons}};
+            args = {[false,true],'discriminant',{cons},testmeth,{cons},...
+                '*SELF*'};
         else
             cvmeth = 'cvclassificationrun';
-            args = {'discriminant',testmeth,cons};
+            args = {'discriminant',testmeth,'*SELF*',cons};
         end
         if nperms < 2
             rdm = GLMProcessor(cvmeth,[],nreturn,args{:});
         else
-            rdm = GLMProcessor('permuteruns',[],nreturn,pind,cvmeth,[],...
+            rdm = GLMProcessor(permmeth,[],nreturn,pind,cvmeth,[],...
                 args{:});
         end
         % NB no longer any need for mean operation here.
@@ -102,24 +115,24 @@ else
         cvmeth = 'validatedclassification';
         assert(nrun==2,['only 2 runs for validatedclassification ' ...
             'first train, second test']);
-        assert(nperms<2,['permutation tests are problematic for ' ...
-            'validatedclassification']);
         arga = {[false,true],'discriminant',crossconout(1),testmeth,...
-            crossconout(2)};
+            crossconout(2),'*SELF*'};
         argb = {[false,true],'discriminant',crossconout(2),testmeth,...
-            crossconout(1)};
+            crossconout(1),'*SELF*'};
     else
         cvmeth = 'cvcrossclassificationrun';
-        arga = {'discriminant',testmeth,crossconout{1},crossconout{2}};
-        argb = {'discriminant',testmeth,crossconout{2},crossconout{1}};
+        arga = {'discriminant',testmeth,'*SELF*',crossconout{1},...
+            crossconout{2}};
+        argb = {'discriminant',testmeth,'*SELF*',crossconout{2},...
+            crossconout{1}};
     end
     if nperms < 2
         rdmcross(1) = GLMProcessor(cvmeth,basearg{:},arga{:});
         rdmcross(2) = GLMProcessor(cvmeth,basearg{:},argb{:});
     else
-        rdmcross(1) = GLMProcessor('permuteruns',basearg{:},pind,...
+        rdmcross(1) = GLMProcessor(permmeth,basearg{:},pind,...
             cvmeth,[],arga{:});
-        rdmcross(2) = GLMProcessor('permuteruns',basearg{:},pind,...
+        rdmcross(2) = GLMProcessor(permmeth,basearg{:},pind,...
             cvmeth,[],argb{:});
     end
     % still necessary? A little bit unsure about this.
