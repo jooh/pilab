@@ -7,27 +7,27 @@
 % reassigning the labels (conind). We override drawpermsample to support
 % such tests here.
 %
-% model = ConvGLM(onsets,conind,tr,data,covariates,[varargin])
+% model = ConvGLM(onsets,conind,frameperiod,data,covariates,[varargin])
 classdef ConvGLM < CovariateGLM
     properties
         onsets
         conind
-        tr
+        frameperiod
         convargs
     end
 
     methods
-        function gl = ConvGLM(onsets,conind,tr,data,covariates,varargin)
+        function gl = ConvGLM(onsets,conind,frameperiod,data,covariates,varargin)
             convargs = varargin;
             if nargin == 0 || isempty(onsets)
-                [X,onsets,conind,tr,data,covariates] = deal([]);
+                [X,onsets,conind,frameperiod,data,covariates] = deal([]);
             else
-                X = convolveonsets(onsets,conind,tr,size(data,1),...
+                X = convolveonsets(onsets,conind,frameperiod,size(data,1),...
                     convargs{:});
             end
             gl = gl@CovariateGLM(X,data,covariates);
-            [gl.onsets,gl.conind,gl.tr,gl.convargs] = deal(onsets,...
-                conind,tr,convargs);
+            [gl.onsets,gl.conind,gl.frameperiod,gl.convargs] = deal(onsets,...
+                conind,frameperiod,convargs);
             % update number of independent observations to number of
             % trials, not number of samples
             gl.nrandsamp = numel(onsets);
@@ -38,7 +38,7 @@ classdef ConvGLM < CovariateGLM
             for r = 1:nrun
                 % re-convolve
                 self(r).X = convolveonsets(self(r).onsets,...
-                    self(r).conind,self(r).tr,self(r).nsamples,...
+                    self(r).conind,self(r).frameperiod,self(r).nsamples,...
                     self(r).convargs{:});
             end
             % use super-class to do covariate filter
@@ -53,7 +53,7 @@ classdef ConvGLM < CovariateGLM
         % model = drawpermsample(self,inds)
             n = cellfun(@numel,{self.conind});
             assert(numel(inds)==n(1),'got %d inds for %d samples',...
-                numel(inds),self(1).nsamples);
+                numel(inds),n(1));
             assert(all(n(1) == n),['design must have same number of ' ...
                 'events in each run.'])
             model = copy(self);
