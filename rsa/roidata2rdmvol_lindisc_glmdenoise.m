@@ -32,7 +32,7 @@
 %   false)
 % nperms: number of permutations to use for permuteruns (default 0)
 %
-% [disvol,denresult] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
+% [disvol,denresult] = roidata2rdmvol_lindisc_glmdenoise(rois,designvol,epivol,varargin)
 function [disvol,denresult] = roidata2rdmvol_lindisc_glmdenoise(rois,designvol,epivol,varargin)
 
 getArgs(varargin,{'glmvarargs',{},'denoisetarget','raw',...
