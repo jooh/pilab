@@ -165,7 +165,7 @@ classdef MriVolume < Volume
                 o = varargin{1};
             else
                 error(['concatenation in feature dimension is not ' ...
-                    'supported for MriVolume classes']);
+                    'supported for MriVolume instances']);
             end
         end
     end
