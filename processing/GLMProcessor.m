@@ -28,7 +28,8 @@
 classdef GLMProcessor < Processor
     properties
         glmmethod = '';
-        varargs = {}
+        varargs = {};
+        selfind = [];
     end
 
     methods
@@ -45,6 +46,11 @@ classdef GLMProcessor < Processor
             end
             gl.glmmethod = glmmethod;
             gl.varargs = varargin;
+            selfposs = strcmp(varargin,'*SELF*');
+            if any(selfposs)
+                logstr('detected *SELF* placeholder\n')
+                gl.selfind = find(selfposs);
+            end
         end
 
         function varargout = call(self,model)
@@ -65,8 +71,10 @@ classdef GLMProcessor < Processor
             for proc = 1:nprocess
                 % run the method for this process (it may return multiple
                 % outputs)
+                args = self(proc).varargs;
+                args{self(proc).selfind} = model;
                 [result{proc,1:nreturn}] = feval(self(proc).glmmethod,...
-                    model,self(proc).varargs{:});
+                    model,args{:});
             end
             % combine the outputs across processes
             [varargout{1:nreturn}] = combinereturns(self,result);
