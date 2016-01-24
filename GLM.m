@@ -239,7 +239,7 @@ classdef GLM < Saveable
             end
         end
 
-        function [res,splitres] = cvclassificationrun(self,trainmeth,testmeth,varargin)
+        function [res,splitres] = cvclassificationrun(self,trainmeth,testmeth,testself,varargin)
         % crossvalidate the performance of some classifier fit with
         % trainmeth (e.g. discriminant) and some testmeth (e.g.
         % infoc). this method is for cases where you want to do out of
@@ -249,12 +249,15 @@ classdef GLM < Saveable
         % methargs is any number of extra arguments. These get passed to
         % both trainmeth and testmeth (e.g., a contrast vector).
         %
-        % [res,splitres] = cvclassificationrun(self,trainmeth,testmeth,[methargs])
-            [res,splitres] = cvcrossclassificationrun(self,trainmeth,testmeth,...
-                varargin,varargin);
+        % [res,splitres] = cvclassificationrun(self,trainmeth,testmeth,[testself],[methargs])
+            if ~exist('testself','var') || isempty(testself)
+                testself = self;
+            end
+            [res,splitres] = cvcrossclassificationrun(self,trainmeth,...
+                testmeth,testself,varargin,varargin);
         end
 
-        function [res,splitres] = cvcrossclassificationrun(self,trainmeth,testmeth,trainargs,testargs)
+        function [res,splitres] = cvcrossclassificationrun(self,trainmeth,testmeth,testself,trainargs,testargs)
         % crossvalidate the performance of some classifier fit with
         % trainmeth (e.g. discriminant) and some set of parameters (e.g. a
         % contrast vector) and apply testmeth (e.g.  infoc) with a
@@ -267,7 +270,7 @@ classdef GLM < Saveable
         % trainargs and testargs are cell arrays with any number of extra
         % arguments.
         %
-        % res = cvcrossclassificationrun(self,trainmeth,testmeth,[trainargs],[testargs])
+        % res = cvcrossclassificationrun(self,trainmeth,testmeth,[testself],[trainargs],[testargs])
             if ~exist('trainargs','var') || isempty(trainargs)
                 trainargs = {};
             end
@@ -276,6 +279,9 @@ classdef GLM < Saveable
             end
             if ~exist('testargs','var') || isempty(testargs)
                 testargs = {};
+            end
+            if ~exist('testself','var') || isempty(testself)
+                testself = self;
             end
             if ~iscell(testargs)
                 testargs = {testargs};
@@ -287,13 +293,13 @@ classdef GLM < Saveable
             for s = 1:nsplit
                 prediction = feval(trainmeth,self(~splits(s,:)),...
                     trainargs{:});
-                splitres{s} = feval(testmeth,self(splits(s,:)),...
+                splitres{s} = feval(testmeth,testself(splits(s,:)),...
                     prediction,testargs{:});
             end
             res = matmean(splitres{:});
         end
 
-        function varargout = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs)
+        function varargout = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs,testself)
         % one-way classification: train some classifier on a training split
         % of self (self(~split)) using trainmeth with trainargs{:}. Then
         % validate the classifier predictions on a test split (self(split))
@@ -302,9 +308,12 @@ classdef GLM < Saveable
         % all data both for training and prediction). Note that we support
         % any number of returns (e.g. both t and p for infot)
         %
-        % varargout = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs)
+        % varargout = validatedclassification(self,split,trainmeth,trainargs,testmeth,testargs,[testself])
+            if ~exist('testself','var') || isempty(testself)
+                testself = self;
+            end
             train = self(~split);
-            test = self(split);
+            test = testself(split);
             tfit = feval(trainmeth,train,trainargs{:});
             [varargout{1:nargout}] = feval(testmeth,test,tfit,testargs{:});
         end
@@ -324,7 +333,7 @@ classdef GLM < Saveable
             end
         end
 
-        function res = cvpredictionrun(self,trainmeth,testmeth)
+        function res = cvpredictionrun(self,trainmeth,testmeth,testself)
         % crossvalidate the performance of some prediction trainmeth (e.g.,
         % predictY) using some testmeth (e.g., rsquare). this method is for
         % cases where you want to do out of sample regression, that is,
@@ -333,18 +342,21 @@ classdef GLM < Saveable
         % classification, that is predicting the columns of the design
         % matrix, use cvclassificationrun. 
         %
-        % res = cvpredictionrun(self,trainmeth,testmeth)
+        % res = cvpredictionrun(self,trainmeth,testmeth,[testself])
+            if ~exist('testself','var') || isempty(testself)
+                testself = self;
+            end
             splits = preparerunsplits(self);
             nsplit = size(splits,1);
             assert(nsplit > 1,'can only crossvalidate if >1 run');
             prediction = cell(nsplit,1);
             for s = 1:nsplit
                 train = self(~splits(s,:));
-                test = self(splits(s,:));
+                test = testself(splits(s,:));
                 prediction{s} = feval(trainmeth,train,getdesign(test));
             end
-            res = feval(testmeth,self(testrunind(self)),...
-                getdata(self,prediction{:}));
+            res = feval(testmeth,testself(testrunind(testself)),...
+                getdata(testself,prediction{:}));
         end
 
         function [estimates,sterrs,bootest] = bootstraprunfit(self,nboot)
@@ -373,7 +385,7 @@ classdef GLM < Saveable
         % nboot - scalar OR a prepared nboot by nrun matrix (e.g.
         %   from preparerunboots). This is useful to yoke bootstraps
         %   across different analyses.
-        % bootmeth - string or cell array defining a set of  valid methods
+        % bootmeth - string or cell array defining a set of valid methods
         %   for self (one varargout is returned for each).
         % [outshape] - optional. Save some cycles by pre-defining,
         %   otherwise we hit bootmeth once to infer it.
