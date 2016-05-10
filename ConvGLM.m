@@ -60,6 +60,17 @@ classdef ConvGLM < CovariateGLM
             for r = 1:length(self)
                 model(r).conind = model(r).conind(inds);
             end
+            % flatten to GLM class for speed (prevents all of these
+            % filtering operations from happening unnecessarily after the
+            % permutation has been done)
+            model = asglm(model);
+        end
+
+        function model = asglm(self)
+            % flatten the ConvGLM to a simple GLM for faster code execution
+            for r = 1:numel(self)
+                model(r) = GLM(getdesign(self(r)),getdata(self(r)));
+            end
         end
     end
 end
