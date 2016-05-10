@@ -1,8 +1,8 @@
-% apply standard filtering and preprocessing options to an epivol/designvol
+% apply standard filtering and preprocessing options to an datavol/designvol
 % pair.
 %
 % INPUT             DEFAULT     DESCRIPTION
-% epivol            -           instance of MriVolume or sub-class
+% datavol            -          Volume instance
 % designvol         -           Volume instance
 %
 % NAMED INPUT       DEFAULT     DESCRIPTION
@@ -28,17 +28,27 @@
 %                                   Note that this doesn't perfectly work
 %                                   for rapid ER designs.
 %
-% [epivol,designvol] = preprocessvols(epivol,designvol,varargin)
-function [epivol,designvol] = preprocessvols(epivol,designvol,varargin)
+% [datavol,designvol] = preprocessvols(datavol,designvol,varargin)
+function [datavol,designvol] = preprocessvols(datain,designin,varargin)
 
 getArgs(varargin,{'matchn',false,'covariatedeg','adaptive',...
     'domedianfilter',false,'sgdetrend',false,'sgolayK',NaN,'sgolayF',NaN,...
     'dozscore',false,'targetlabels',[],'ignorelabels',[],...
     'setclass',[],'resortind',[],'percentsignal',false});
 
+% need to make a copy of each volume here, otherwise changes are made in
+% place, quietly, in some cases.
+datavol = datain(:,1:end);
+designvol = designin(:,1:end);
+% this test shouldn't be here but there have historically been problems
+% with this kind of stuff so let's just be extra sure.
+assert(strcmp(class(datavol),class(datain)),'indexing broke data class')
+assert(strcmp(class(designvol),class(designin)),...
+    'indexing broke data class')
+
 if matchn
-    nperchunk = arrayfun(@(c)sum(epivol.meta.samples.chunks==c),...
-        epivol.desc.samples.unique.chunks);
+    nperchunk = arrayfun(@(c)sum(datavol.meta.samples.chunks==c),...
+        datavol.desc.samples.unique.chunks);
     targetn = min(nperchunk);
     if all(targetn == nperchunk);
         logstr('all chunks have same number of samples\n');
@@ -47,13 +57,13 @@ if matchn
             targetn);
         % this might actually be a tad hairy. need to apply the
         % same to design and epi obviously
-        goodsamp = false(epivol.nsamples,1);
-        for c = 1:epivol.desc.samples.nunique.chunks
-            chunkind = find(epivol.meta.samples.chunks == ...
-                epivol.desc.samples.unique.chunks(c));
+        goodsamp = false(datavol.nsamples,1);
+        for c = 1:datavol.desc.samples.nunique.chunks
+            chunkind = find(datavol.meta.samples.chunks == ...
+                datavol.desc.samples.unique.chunks(c));
             goodsamp(chunkind(1:targetn)) = true;
         end
-        epivol = epivol(goodsamp,:);
+        datavol = datavol(goodsamp,:);
         designvol = designvol(goodsamp,:);
         logstr('removed %d samples (%2.0f%% of total)\n',...
             sum(~goodsamp),100*sum(~goodsamp) / numel(goodsamp));
@@ -63,7 +73,7 @@ end
 if percentsignal
     logstr('scaling data to percent signal change\n');
     % scale epi by 100 * mean per voxel
-    filterbychunk(epivol,@(x)100*bsxfun(@rdivide,x,mean(x)));
+    filterbychunk(datavol,@(x)100*bsxfun(@rdivide,x,mean(x)));
     % scale design matrix by global max (so the peak across the design
     % matrix is 1)
     filterbychunk(designvol,@(x)bsxfun(@rdivide,x,max(x(:))));
@@ -71,19 +81,19 @@ end
 
 % de-trend config
 if strcmp(covariatedeg,'adaptive')
-    covariatedeg = vol2covdeg(epivol);
+    covariatedeg = vol2covdeg(datavol);
 end
 
 % first high-pass trend removal
 if ~isempty(covariatedeg)
     logstr('polynomial detrend (degree=%.0f)\n',covariatedeg);
-    filterbychunk(epivol,'polydetrend',covariatedeg);
+    filterbychunk(datavol,'polydetrend',covariatedeg);
     filterbychunk(designvol,'polydetrend',covariatedeg);
 end
 
 if ~isempty(domedianfilter) && domedianfilter
     logstr('median filter (n=%.0f)\n',domedianfilter);
-    filterbychunk(epivol,'medianfilter',domedianfilter);
+    filterbychunk(datavol,'medianfilter',domedianfilter);
     filterbychunk(designvol,'medianfilter',domedianfilter);
 end
 
@@ -91,15 +101,15 @@ if sgdetrend
     logstr('Savitzky-Golay detrend (k=%.0f,f=%.0f)\n',...
         sgolayK,sgolayF);
     % insure double
-    epivol.data = double(epivol.data);
+    datavol.data = double(datavol.data);
     designvol.data = double(designvol.data);
-    sgdetrend(epivol,sgolayK,sgolayF);
+    sgdetrend(datavol,sgolayK,sgolayF);
     sgdetrend(designvol,sgolayK,sgolayF);
 end
 
 if dozscore
     logstr('Z-scoring samples\n')
-    filterbychunk(epivol,'zscore',[],1);
+    filterbychunk(datavol,'zscore',[],1);
     filterbychunk(designvol,'zscore',[],1);
 end
 
@@ -126,15 +136,15 @@ if ~isequal(coninds,1:nlabels)
     if ~isempty(ignoreinds)
         logstr('projecting out %d covariates\n',...
             size(covariates,2));
-        for c = 1:epivol.desc.samples.nunique.chunks
-            chunkind = epivol.meta.samples.chunks == ...
-                epivol.desc.samples.unique.chunks(c);
+        for c = 1:datavol.desc.samples.nunique.chunks
+            chunkind = datavol.meta.samples.chunks == ...
+                datavol.desc.samples.unique.chunks(c);
             assert(isequal(chunkind,...
                 designvol.meta.samples.chunks == ...
                 designvol.desc.samples.unique.chunks(c)),...
-                'mismatched chunks in epivol and designvol');
-            epivol.data(chunkind,:) = projectout(...
-                epivol.data(chunkind,:),covariates(chunkind,:));
+                'mismatched chunks in datavol and designvol');
+            datavol.data(chunkind,:) = projectout(...
+                datavol.data(chunkind,:),covariates(chunkind,:));
             designvol.data(chunkind,:) = projectout(...
                 designvol.data(chunkind,:),covariates(chunkind,:));
         end
@@ -144,7 +154,7 @@ end
 % now set class last - so maximal precision for pre-processing
 if ~isempty(setclass)
     logstr('setting data to %s\n',setclass);
-    epivol.data = feval(setclass,epivol.data);
+    datavol.data = feval(setclass,datavol.data);
     designvol.data = feval(setclass,designvol.data);
 end
 
