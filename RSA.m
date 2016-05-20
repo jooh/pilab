@@ -20,6 +20,9 @@ classdef RSA < GLM
                 issplitdata = issplitdatardm(Xrdm);
                 datardm = asrdmmat(datardms);
                 [ncon,~,npredictors] = size(Xrdm);
+                % should start out the same size for sanity
+                assert(ncon == size(datardm,1),['data rdm does not '...
+                    'match model rdm']);
                 % handle NaN content
                 nanx = isnan(Xrdm);
                 % first drop any conditions that are all NaNs (ie, all
