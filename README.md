@@ -24,12 +24,13 @@ model. Convenient class methods enable bootstrapping and permutation
 testing.
 
 ## containers
-Data and metadata are stored together in BaseVolume and MriVolume instances.
-The basic representation of data is 2D (samples by features), and metadata
-is similarly supported for either dimension. A number of flexible methods
-are available for indexing data according to metadata, and (in the case of
-MriVolume) for converting samples (1 by nfeatures vectors) to volumetric 3D
-matrix form, or for writing out to disk as nifti.
+Data and metadata are stored together in Volume classes, which provide a
+convenient, pandas-like (but not as performant) interface. The basic
+representation of data is 2D (samples by features), and metadata is similarly
+supported for either dimension. A number of flexible methods are available for
+indexing data according to metadata, and (in the case of MriVolume) for
+converting samples (1 by nfeatures vectors) to volumetric 3D matrix form, or for
+writing out to disk in nifti format.
 
 This flexibility and metadata support comes at a substantial performance
 cost. Most analysis functions therefore convert the container to a raw
@@ -57,17 +58,13 @@ which enables a standardised solution for random effects group analysis
 (glm/roidata_rfx).
 
 # about pattern information analysis and this repository
-pilab is being developed by [Johan
-Carlin](mailto:johan.carlin@mrc-cbu.cam.ac.uk) at the [MRC Cognition and
-Brain Sciences Unit](http://www.mrc-cbu.cam.ac.uk) (CBU), Cambridge, UK. Any
+pilab is being developed by [Johan Carlin](mailto:j.carlin@ucl.ac.uk). Any
 comments and queries are welcome. 
 
-This code is an implementation of analysis methods originally proposed by
-[Niko
-Kriegeskorte](http://www.mrc-cbu.cam.ac.uk/people/nikolaus.kriegeskorte)
-and collaborators. The reference section below lists relevant academic
-publications, which should be cited in any publications resulting from the
-use of this code.
+This code is an implementation of analysis methods originally proposed by [Niko
+Kriegeskorte](http://www.mrc-cbu.cam.ac.uk/people/nikolaus.kriegeskorte) and
+collaborators. The reference section below lists relevant academic publications,
+which should be cited in any publications resulting from the use of this code.
 
 Note that pilab is pre-alpha code undergoing active development. Absolutely
 no guarantees are provided concerning the accuracy of results at this
