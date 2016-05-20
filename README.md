@@ -2,6 +2,94 @@ This code provides some general tools for univariate and multivariate
 modelling of data in Matlab. The code is angled toward fMRI
 datasets but is sufficiently general to support other use cases too.
 
+# a simple demo
+The function below provides a sort of crash course in how to use the code.  The
+visualisations require code from my [plotting
+repository](https://github.com/jooh/matlab-plotting).
+
+```
+function pilabdemo()
+
+% control variables for the simulation
+n = 200;
+tr = 2;
+ntrial = 20;
+ncon = 4;
+nvox = 50;
+nrun = 2;
+
+% true parameters - same across runs
+b = rand(ncon+1,nvox);
+for r = 1:nrun
+    % different trial order in each run
+    conind = ceil(rand(ntrial,1) * ncon);
+    onsets = rand(ntrial,1) * n;
+    X = [convolveonsets(onsets,conind,tr,n,'dur',1) ones(n,1)];
+    % scale design matrix to peak at 1
+    X = X / max(X(:));
+    % construct data as some mixture of gaussian noise and the true parameters
+    % scaled by each predictor
+    data = randn(n,nvox)*.1 + X*b;
+    % build Volume instances for convolved design and data
+    metasamp = struct('chunks',ones(n,1)*r);
+    designvol{r} = Volume(X,'metasamples',metasamp,...
+        'metafeatures',struct('names',{{'a','b','c','d','constant'}}));
+    datavol{r} = Volume(data,'metasamples',metasamp);
+end
+% operator overloading means we can use standard concatenation syntax to combine
+% the Volume instances over runs
+datavol = cat(1,datavol{:});
+designvol = cat(1,designvol{:});
+
+% now let's build a simple GLM instance to demonstrate some functionality
+model = vol2glm(designvol,datavol);
+% visualise model and data
+fh = figure;
+set(fh,'name','data vs model');
+subplot(2,1,1);
+ph = plot(designvol.data);
+title('model')
+legend(ph,designvol.meta.features.names);
+subplot(2,1,2);
+imagesc(datavol.data');
+title('data')
+ylabel('features')
+xlabel('samples')
+% cross-validated prediction - use model(2) fit and model(1) design matrix
+% Notice that the GLM is an object array class, so can be indexed like a struct
+% to run particular methods on say a train and a test split of the data.
+prediction = predictY(model(2),model(1).X);
+% evaluate on model(1) data
+r2 = rsquare(model(1),prediction);
+% visualise fit
+fh = figure;
+set(fh,'name','fit vs data');
+ph = plot([prediction(:,1) model(1).data(:,1)],'.-');
+legend(ph,{'prediction','data'},'location','best');
+% cross-validated linear discriminant contrast (train on 2, test on 1)
+m = infoc(model(1),discriminant(model(2),[1 -1 0 0 0]),[1 -1 0 0 0]);
+
+% or to use the higher level analysis functions, let's build an additional
+% region of interest Volume, which stores the valid features for each ROI
+roivol = Volume([ones(1,nvox); ones(1,floor(nvox/2)) zeros(1,ceil(nvox/2)); ...
+    zeros(1,floor(nvox/2)) ones(1,ceil(nvox/2))],'metasamples',struct(...
+    'names',{{'allfeatures','firsthalf','secondhalf'}}));
+% now we can just call this high-level analysis function to obtain the
+% cross-validated linear discriminant contrast for each pair of conditions - a
+% sort of distance matrix that we then visualise.
+disvol = roidata2rdmvol_lindisc_batch(roivol,designvol,datavol);
+maxd = max(abs(disvol.data(:)));
+[fh,ax,intmap,cmap] = rdmfig(disvol.data,disvol.meta.features.names,[],[],...
+    'limits',[-maxd maxd]);
+set(fh,'name','distance matrices');
+cbax = subplot(2,2,4);
+c = colorbarbetter(cbax,intmap{end},cmap{end});
+```
+
+Easy, right? There is a lot more going on under the surface. Probably the
+easiest way to go further is to explore the methods of the GLM and its sub
+classes. One of these days there will be a proper manual...
+
 # organisation
 The core components of pilab are a set of container classes for storing and
 manipulating data and a set of GLM-based classes for data analysis. These
