@@ -1,25 +1,3 @@
-% Ok, let's forget about sub-classing. All we need is a data field that
-% contains the relevant inputs, a meta.samples.chunks field for
-% surviving the input check in roidata2rdmvol_lindisc_batch, and nfeatures
-% So if we use covariates as the data field we obtain the correct sample
-% size, which is helpful for row-based indexing. But how ensure the right
-% onsets and conind come with?
-%
-% So assumptions:
-% data needs to contain the same number of rows as epivol
-% meta.samples.chunks needs to be configured properly
-% nfeatures needs to be nreg
-%
-% the ROIPRocessor only enters design.data into runrois_serial. So need to
-% put all the parameters in here
-%
-% we can modify array2glm, vol2glm and roidata2rdmvol to relax these
-% assumptions.
-%   Specifically, replace GLMConstructor with a DesignConstructor. This
-%   should work really nicely actually. Getting close now...
-%
-% If we forget the assumptions, the format that makes sense here is a struct
-% array.
 classdef DesignSpec < handle
     properties
         data

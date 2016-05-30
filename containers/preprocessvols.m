@@ -122,7 +122,7 @@ else
         targetlabels));
 end
 if ~isempty(ignorelabels)
-    ignoreinds = find(strcmp(designvol.desc.features.unique.labels,...
+    ignoreinds = find(strcmp(designvol.meta.features.labels,...
         ignorelabels));
     coninds = setdiff(coninds,ignoreinds,'stable');
 end
