@@ -17,14 +17,14 @@
 %                                   missing data
 % screenlims    d.myscreen.displaySize/2 rescore data outside these lims as
 %                                   missing
-%
 % scans         1:viewGet(v,'nscans')   scans to import
 % ignorelabels  []              remove data for these values of varname
 % taskNum       1               inputs for getTaskEyeTraces
 % phaseNum      1
 % segmentNum    1
 % dataPad       3
-% removeBlink   .15
+% removeBlink   .15             extra time to cut around each blink to
+%                                   reduce eyelid artefact
 %
 % [eyevol,designvol] = mreyelink2vol(stimfiles,varname,dur,varargin)
 function [eyevol,designvol] = mreyelink2vol(stimfiles,varname,dur,varargin)
@@ -64,10 +64,11 @@ end
 frameperiod = [];
 
 metasamples = struct('chunks',[],'filenames',[]);
-datametafeatures = struct('time',[]);
 ulabels = [];
 
 rc = 0;
+eyevol = {};
+designvol = {};
 for r = 1:nrun
     t = getTaskEyeTraces(stimfiles{r},'dataPad',dataPad,'removeBlink',...
         removeBlink,'taskNum',taskNum,'phaseNum',phaseNum,'segNum',...
@@ -82,91 +83,8 @@ for r = 1:nrun
         d = load(stimfiles{r});
         screenlims = d.myscreen.displaySize/2;
     end
-
     frameperiod = setifunset(frameperiod,median(diff(t.eye.time)),1);
-    dodownsample = ~isempty(downperiod) && downperiod~=frameperiod;
-    nsamples = round(dur/frameperiod);
-    [ntrials,npossiblesamples] = size(t.eye.xPos);
-    % keep track of bad trials (missing data or ignorelabels)
-    badrows = false([ntrials,1]);
-    assert(nsamples <= npossiblesamples,'not enough samples for dur');
-
-    % rescore data outside screen edges as missing
-    outsideind = abs(t.eye.xPos) > screenlims(1) | ...
-        abs(t.eye.yPos)>screenlims(2);
-    t.eye.xPos(outsideind) = NaN;
-    t.eye.yPos(outsideind) = NaN;
-    t.eye.pupil(outsideind) = NaN;
-
-    % keep track of how much we're missing per run
-    pmissing = sum(asrow(isnan(t.eye.xPos(:,1:nsamples)))) ./ ...
-        numel(t.eye.xPos(:,1:nsamples));
-    if pmissing > removerunthresh
-        logstr('excessive missing data, skipping run %d\n',r);
-        continue;
-    end
-    rc = rc+1;
-    data.qa(rc).propmissing = pmissing;
-    assert(isequal(isnan(t.eye.xPos),isnan(t.eye.yPos),...
-        isnan(t.eye.pupil)),'mismatched NaN across data fields');
-    data.qa(rc).wasmissing = isnan(t.eye.xPos);
-
-    % collect data
-    thistime = t.eye.time(1:nsamples);
-    for outfn = fieldnames(fieldmap)'
-        outfnstr = outfn{1};
-        mrfnstr = fieldmap.(outfnstr);
-        data.raw(rc).(outfnstr) = t.eye.(mrfnstr)(:,1:nsamples);
-
-        if dodownsample
-            % downsample the signal to this many samples
-            ndown = round(nsamples * (frameperiod / downperiod));
-            % raw indices for each new sample
-            downind = floor(linspace(1,ndown+1,nsamples+1))';
-            downind(end) = [];
-            % so now we can accumarray based on this
-            newdata = NaN([ntrials ndown],class(data.raw(rc).(outfnstr)));
-            for tr = 1:ntrials
-                newdata(tr,:) = accumarray(downind,...
-                    data.raw(rc).(outfnstr)(tr,:),[],@nanmedian);
-            end
-            % put back in data.raw
-            data.raw(rc).(outfnstr) = newdata;
-        end
-
-        % extract means before interpolation, but after downsampling
-        data.means(rc).(outfnstr) = nanmean(data.raw(rc).(outfnstr),2);
-        
-        % update badrows with trials that have too much missing data
-        % (suggesting interpolation can't be trusted)
-        % (but note that we keep it in for now because it's easier to just
-        % do all the bad data removal at once at the end)
-        pmissing = sum(isnan(data.raw(rc).(outfnstr)),2) ./ ...
-            size(data.raw(rc).(outfnstr),2);
-        badrows = badrows | pmissing > removetrialthresh;
-
-        % do the interpolation (transpose since interpolatemissing works on
-        % rows not columns)
-        data.raw(rc).(outfnstr) = interpolatemissing(...
-            data.raw(rc).(outfnstr)')';
-
-        if demean
-            % now we need to de-mean relative to the INTERPOLATED mean. Bit
-            % funky.
-            data.raw(rc).(outfnstr) = data.raw(rc).(outfnstr) - mean(...
-                data.raw(rc).(outfnstr)(:));
-        end
-    end
-    if dodownsample
-        timeind = [true; diff(downind)~=0];
-        thistime = thistime(timeind);
-    end
-
-    % extract meta data
-    metasamples(rc).chunks = ones(ntrials,1)*r;
-    metasamples(rc).filenames = repmat(stimfiles(r),[ntrials 1]);
-    datametafeatures.time = setifunset(datametafeatures.time,thistime);
-
+    
     % figure out model
     if isfield(t.parameter,varname)
         % use that
@@ -178,47 +96,32 @@ for r = 1:nrun
         error('could not find varname: %s',varname);
     end
     vardata = d.(varname);
-    if ~isempty(ignorelabels)
-        badrows = badrows | vardata' == ignorelabels;
-        vardata(badrows) = [];
-        for fn = fieldnames(data.raw)'
-            fnstr = fn{1};
-            data.raw(rc).(fnstr)(badrows,:) = [];
-        end
-        for fn = fieldnames(metasamples)'
-            fnstr = fn{1};
-            metasamples(rc).(fnstr)(badrows) = [];
-        end
-        % update ntrials estimate
-        ntrials = length(metasamples(rc).(fnstr));
-    end
+    % check that labels aren't changing over runs
     ulabels = setifunset(ulabels,unique(vardata),true);
-    linind = sub2ind([ntrials numel(ulabels)],1:ntrials,vardata);
-    design{rc} = zeros(ntrials,numel(ulabels));
-    design{rc}(linind) = 1;
-    if demean
-        design{rc} = bsxfun(@minus,design{rc},mean(design{rc},1));
-    end
-end
 
-designvol = [];
-eyevol = {};
-if rc>0
-    % NB frameperiod isn't strictly correct here - there may be gaps between
-    % trials
-    metasamples = collapsestruct(metasamples,@vertcat,true);
-    designvol = Volume(cat(1,design{:}),'metasamples',metasamples,...
-        'metafeatures',struct('labels',...
-        {mat2strcell(ulabels,[varname '_%d'])}));
+    % TODO: also get conind
+    datastruct = struct('x',t.eye.xPos,'y',t.eye.yPos,...
+        'pupil',t.eye.pupil,'time',t.eye.time,'conind',vardata);
 
-    % now combine some set of the data and make the eyevol
-    for outfn = fieldnames(fieldmap)'
-        outfnstr = outfn{1};
-        thismeta = datametafeatures;
-        thismeta.datatype = repmat({outfnstr},[1 size(data.raw(1).(outfnstr),2)]);
-        eyevol{end+1} = Volume(cat(1,data.raw.(outfnstr)),'metasamples',...
-            metasamples,'metafeatures',thismeta);
+    % keep track of how much we're missing per run
+    pmissing = sum(asrow(isnan(datastruct.x(:,1:nsamples)))) ./ ...
+        numel(datastruct.x(:,1:nsamples));
+    if pmissing > removerunthresh
+        logstr('excessive missing data, skipping.\n';
+        continue
     end
-    % and collapse to a single eyevol
-    eyevol = horzcat(eyevol{:});
+    % so we're keeping this run
+    rc = rc+1;
+    [eyevol{rc},designvol{rc}] = eyedata2vol(datastruct,frameperiod,...
+        'screenlims',screenlims,...
+        'downperiod',downperiod,...
+        'demean',demean,...
+        'removetrialthresh',removetrialthresh,...
+        'dur',dur,...
+        'targetfields',targetfields);
+    ntrials = eyevol{rc}.nsamples;
+    eyevol{rc}.meta.samples.chunks = ones(ntrials,1)*r;
+    designvol{rc}.meta.samples.chunks = ones(ntrials,1)*r;
+    eyevol{rc}.meta.samples.filenames = repmat(stimfiles(r),[ntrials 1]);
+    designvol{rc}.meta.samples.filenames = repmat(stimfiles(r),[ntrials 1]);
 end
