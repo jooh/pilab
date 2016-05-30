@@ -69,9 +69,9 @@ assert(isequal(epivol.meta.samples.chunks,...
 
 % serial ROI iteration if no matlabpool OR if we are running a permutation
 % test (since this already uses parfor).
-% you'd think this would make very little difference the speedup is about
-% 3.5x compared to running permutation tests with this setting still in
-% runrois_spmd and letting Matlab sort out the parallelisation.
+% you'd think this would make very little difference but the speedup is
+% about 3.5x compared to running permutation tests with this setting still
+% in runrois_spmd and letting Matlab sort out the parallelisation.
 if ~matlabpool('size') || nperms > 1
     runfun = 'runrois_serial';
 else
