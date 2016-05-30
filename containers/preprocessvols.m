@@ -6,8 +6,8 @@
 % designvol         -           Volume instance
 %
 % NAMED INPUT       DEFAULT     DESCRIPTION
-% matchn            false        match number of volumes across runs
-% covariatedeg      'adaptive'  degree of polynomial detrend (0:n).
+% matchn            false       match number of volumes across runs
+% covariatedeg      ''          degree of polynomial detrend (0:n).
 %                                   'adaptive' means we find a value using
 %                                   vol2covdeg
 % domedianfilter    false       medianfilter the data over time
@@ -31,7 +31,7 @@
 % [datavol,designvol] = preprocessvols(datavol,designvol,varargin)
 function [datavol,designvol] = preprocessvols(datain,designin,varargin)
 
-getArgs(varargin,{'matchn',false,'covariatedeg','adaptive',...
+getArgs(varargin,{'matchn',false,'covariatedeg','',...
     'domedianfilter',false,'sgdetrend',false,'sgolayK',NaN,'sgolayF',NaN,...
     'dozscore',false,'targetlabels',[],'ignorelabels',[],...
     'setclass',[],'resortind',[],'percentsignal',false});
@@ -122,7 +122,7 @@ else
         targetlabels));
 end
 if ~isempty(ignorelabels)
-    ignoreinds = find(strcmp(designvol.desc.features.unique.labels,...
+    ignoreinds = find(strcmp(designvol.meta.features.labels,...
         ignorelabels));
     coninds = setdiff(coninds,ignoreinds,'stable');
 end
