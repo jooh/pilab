@@ -17,13 +17,14 @@
 % p: ([]) matrix defining parametric modulators on each onset (default means
 %   no modulation)
 % dur: (0) duration of each response (default means a single bin duration)
+% scalepeak: (true) scale peak of design matrix to 1
 %
 % [X,onserr] = convolveonsets(onsets,conind,tr,n,varargin)
 function [X,onserr] = convolveonsets(onsets,conind,tr,n,varargin)
 
 ntrials = numel(onsets);
 getArgs(varargin,{'hrffun','spm_hrf','nbin',32,'p',[],...
-    'dur',zeros(ntrials,1)});
+    'dur',zeros(ntrials,1),'scalepeak',true});
 
 % check parametric modulator
 assert(isempty(p) || size(p,1)==ntrials,'p does not match ntrials');
@@ -75,3 +76,7 @@ convx = conv2(superx,hrf);
 
 % downsample to TR
 X = downsample(convx(1:nsuper-1,:),nbin);
+
+if scalepeak
+    X = X / max(X(:));
+end
