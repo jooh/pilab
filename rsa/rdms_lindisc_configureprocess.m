@@ -4,7 +4,7 @@ getArgs(varargin,{'glmvarargs',{},'cvsplit',[],...
     'glmclass','GLM','sterrunits',0,'crossvalidate',true,...
     'crosscon',[],'ncon',[],'setclass','double','demean',false,...
     'nperms',0,'onewayvalidation',false,'returnp',false,...
-    'ntrials',NaN});
+    'ntrials',NaN,'permmeth','permuteruns'});
 
 if ~iscell(glmvarargs)
     if isempty(glmvarargs)
@@ -41,7 +41,6 @@ logstr('testmeth: %s\n',testmeth);
 
 % assemble processors
 glmspec = GLMConstructor(glmclass,cvsplit,glmvarargs{:});
-permmeth = 'permuteruns';
 
 if strcmp(glmclass,'ConvGLM')
     glmspec = ConvGLMConstructor(cvsplit);
@@ -49,20 +48,25 @@ if strcmp(glmclass,'ConvGLM')
 end
 
 nrun = numel(cvsplit);
-if nperms > 1
-    switch permmeth
-        case 'permuteruns'
-            assert(~isempty(cvsplit),['cvsplit must be defined for ' ...
-                'permutation test']);
-            % bit hacky but there's no telling how many runs we will have
-            % at this stage.
-            % Note that this solution isn't exactly bullet proof.
-            pind = permuteindices(nrun,nperms);
-        case 'permutesamples'
-            % hm.
-            pind = permuteindices(ntrials,nperms);
-        otherwise
-            error('unknown permmeth: %s',permmeth)
+if ~isscalar(nperms)
+    pind = nperms;
+    nperms = size(pind,1);
+else
+    if nperms > 1
+        switch permmeth
+            case 'permuteruns'
+                assert(~isempty(cvsplit),['cvsplit must be defined for ' ...
+                    'permutation test']);
+                % bit hacky but there's no telling how many runs we will have
+                % at this stage.
+                % Note that this solution isn't exactly bullet proof.
+                pind = permuteindices(nrun,nperms);
+            case 'permutesamples'
+                % hm.
+                pind = permuteindices(ntrials,nperms);
+            otherwise
+                error('unknown permmeth: %s',permmeth)
+        end
     end
 end
 
