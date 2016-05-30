@@ -1,25 +1,17 @@
-% Ok, let's forget about sub-classing. All we need is a data field that
-% contains the relevant inputs, a meta.samples.chunks field for
-% surviving the input check in roidata2rdmvol_lindisc_batch, and nfeatures
-% So if we use covariates as the data field we obtain the correct sample
-% size, which is helpful for row-based indexing. But how ensure the right
-% onsets and conind come with?
+% Container class for storing the onsets and conditions for a study for
+% later convolution with convolveonsets (see designmatrix method).
 %
-% So assumptions:
-% data needs to contain the same number of rows as epivol
-% meta.samples.chunks needs to be configured properly
-% nfeatures needs to be nreg
+% INPUTS
+% design: struct with the fields onsets, conind, n, chunk, covariates,
+%   convargs and frameperiod
+% frameperiod: optional global frameperiod that get plugged into each
+%   design
+% names: go into meta.features.names for compatibility with Volume and
+%   processing code
+% varargin: optional global convargs inputs that get plugged into each
+%   design
 %
-% the ROIPRocessor only enters design.data into runrois_serial. So need to
-% put all the parameters in here
-%
-% we can modify array2glm, vol2glm and roidata2rdmvol to relax these
-% assumptions.
-%   Specifically, replace GLMConstructor with a DesignConstructor. This
-%   should work really nicely actually. Getting close now...
-%
-% If we forget the assumptions, the format that makes sense here is a struct
-% array.
+% ds = DesignSpec(design,frameperiod,names,varargin)
 classdef DesignSpec < handle
     properties
         data
@@ -29,7 +21,7 @@ classdef DesignSpec < handle
     end
 
     methods
-        function ds = DesignSpec(design,frameperiod,varargin)
+        function ds = DesignSpec(design,frameperiod,names,varargin)
             if ~any(nargin)
                 design = emptystruct('onsets','conind','n','chunk',...
                     'covariates','convargs','frameperiod');
@@ -47,7 +39,8 @@ classdef DesignSpec < handle
                     ds.data(c).chunk = c;
                 end
                 if isscalar(ds.data(c).chunk)
-                    ds.data(c).chunk = ones(ds.data(c).n,1) * c;
+                    ds.data(c).chunk = ones(ds.data(c).n,1) * ...
+                        ds.data(c).chunk;
                 end
                 if ~isfield(ds.data,'convargs') || isempty(ds.data(c).convargs)
                     ds.data(c).convargs = varargin;
@@ -57,16 +50,25 @@ classdef DesignSpec < handle
                 end
             end
             ds.meta.samples.chunks = vertcat(ds.data.chunk);
+            ds.meta.features.names = names;
             ds.nfeatures = numel(unique(design(1).conind));
             ds.nsamples = sum([design.n]);
         end
 
         function [X,errs] = designmatrix(self)
-            for d = 1:numel(self.design)
-                [X{d},errs{d}] = convolveonsets(self.design(d).onsets,...
-                    self.design(d).conind,self.design(d).frameperiod,...
-                    self.design(d).n,self.design(d).convargs{:});
+            for d = 1:numel(self.data)
+                [X{d},errs{d}] = convolveonsets(self.data(d).onsets,...
+                    self.data(d).conind,self.data(d).frameperiod,...
+                    self.data(d).n,self.data(d).convargs{:});
             end
+        end
+
+        function ds = selectbymeta(self,target,vals)
+            assert(strcmp(target,'chunks'),...
+                'only chunks are supported at present');
+            chunks = arrayfun(@(x)self.data(x).chunk(1),1:numel(self.data))
+            [~,ind] = intersect(chunks,vals,'stable');
+            ds = DesignSpec(self.data(ind),[],self.meta.features.names);
         end
     end
 end
