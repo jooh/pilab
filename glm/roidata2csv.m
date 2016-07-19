@@ -7,6 +7,9 @@
 % conind        1:ncon          numeric or logical indices into the rows of res.
 %                                   We also support cell array inputs, in which
 %                                   case we use intersect to find indices.
+%                                   Finally, if you enter the char
+%                                   'nocontrasts' we output everything that
+%                                   doesn't begin with 'contrast_'.
 % roiind        1:nroi          numeric or logical indices into the columns of
 %                                   res.
 % precision     []              passed on to table2csv - see that function
