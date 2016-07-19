@@ -18,5 +18,5 @@ rdm = asrdmmat(rdm);
 assert(nrdm==1,'only 1 input RDM can be entered per call');
 
 % NB need to insert extra column label to account for rowlabels
-table2csv(rdm,outpath,'rowlabels',names,'collabels',[{''},names(:)'],...
-    varargin{:});
+table2csv(rdm,outpath,'rowlabels',ascol(names),...
+    'collabels',[{''},asrow(names)],varargin{:});
