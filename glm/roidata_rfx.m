@@ -25,6 +25,9 @@
 %       conplus
 %       conminus
 %       tail
+% roicontrasts: calculate differences between particular regions of
+%   interest.  similar functionality as contrasts, but the result is added
+%   as a new column rather than as a new row.
 % customfits: obtain a result by applying some function to the data. char
 %   that gets fevaled or struct with the following mandatory fields:
 %       name
@@ -45,6 +48,7 @@ function [meanres,groupres,nulldist,bootdist] = roidata_rfx(subres,varargin)
 getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','r','transfun',[],...
     'assumeregister',false,'varsmoothmask',[],'varsmoothfwhm',8,...
     'contrasts',emptystruct('name','conplus','conminus','tail'),...
+    'roicontrasts',emptystruct('name','conplus','conminus','tail'),...
     'customfits',emptystruct('name','funhand','cons','tail'),'minn',2,...
     'keepnans',false,'multpdim','roi','customfun',[]});
 
@@ -77,15 +81,16 @@ if numel(subres)==1 && isfield(subres,'z_subject')
     names = groupres.z_subject;
 else
     names = {subres.name};
-    if assumeregister
-        % just take rois from first subject
-        urois = subres(1).cols_roi;
-    else
+    % just take rois from first subject
+    urois = subres(1).cols_roi;
+    if ~assumeregister
         % find all possible ROIs (not all subjects will have all ROIs
         % necessarily)
         allrois = {subres.cols_roi};
         allrois = horzcat(allrois{:});
-        urois = unique(allrois);
+        allurois = unique(allrois);
+        % sort in same order as subject 1's ROIs as far as possible.
+        urois = [urois setdiff(allurois,urois)];
     end
     nroi = length(urois);
     dat = NaN([ncon nroi nsub]);
@@ -197,6 +202,37 @@ if ~isempty(contrasts)
     end
 end
 
+if ~isempty(roicontrasts)
+    if ischar(roicontrasts)
+        roicontrasts = feval(roicontrasts,groupres.cols_roi);
+    end
+    assert(isstruct(roicontrasts),'roicontrasts must be a struct');
+    % the complication here is that tail is ncon 1, but e.g. for a
+    % roicontrast of a 1-tailed test we actually want a 2-tailed test.
+    % Ultimately we may need to make tail a matrix rather than vector but
+    % for now we just throw an exception if this case arises.
+    assert(~any(strcmp(tail,'right') | strcmp(tail,'left')),...
+        'one-tailed tests are not supported with roicontrasts at present');
+    for c = 1:length(roicontrasts)
+        % find the rows corresponding to each condition
+        posind = findconind(groupres.cols_roi,roicontrasts(c).conplus);
+        % average any multiples
+        meanpos = nanmean(groupres.(targetfield)(:,posind,:),2);
+        if isempty(roicontrasts(c).conminus)
+            % a vs 0 contrast
+            meanneg = zeros(size(meanpos));
+        else
+            % a vs b contrast
+            negind = findconind(groupres.cols_roi,roicontrasts(c).conminus);
+            assert(~any(intersect(posind,negind)),...
+                'same predictor on both sides of contrast');
+            meanneg = nanmean(groupres.(targetfield)(:,negind,:),2);
+        end
+        groupres.(targetfield)(:,end+1,:) = meanpos-meanneg;
+        groupres.cols_roi{end+1} = roicontrasts(c).name;
+    end
+end
+
 % remove undersized ROIs
 n = sum(~isnan(groupres.(targetfield)),3);
 % conditions that are all NaN across ROIs
@@ -275,7 +311,6 @@ switch multpdim
         % iterate over cons, correct over all ROIs
         fwedim = 1;
         fwelim = ncon;
-        tail = meanres.tail;
         threshshape = [ncon 1];
     case 'con'
         % iverate over ROIs, correct over all cons
@@ -306,6 +341,7 @@ end
 
 meanres.pperm = NaN(size(meanres.t));
 meanres.pfweperm = NaN(size(meanres.t));
+meanres.pparafdr = NaN(size(meanres.t));
 meanres.pfdrthresh = NaN(threshshape);
 meanres.medianboot = NaN(size(meanres.t));
 meanres.medianste = NaN(size(meanres.t));
@@ -371,7 +407,7 @@ if nperm > 1 || nboot > 0
                 end
             end
             try
-                meanres.pfdrthresh(c) = FDRthreshold(meanres.ppara(c,:));
+                [~,meanres.pfdrthresh(c),~,meanres.pparafdr(c,:)] = fdr_bh(meanres.ppara(c,:));
             catch
                 err = lasterror;
                 if ~strcmp(err.identifier,'MATLAB:badsubscript')
@@ -440,16 +476,8 @@ if nperm > 1 || nboot > 0
             end
             % don't need tail here because the ppara field is already
             % tailed
-            try
-                meanres.pfdrthresh(c) = FDRthreshold(indexdim(...
-                    meanres.ppara,c,fwedim));
-            catch
-                err = lasterror;
-                if ~strcmp(err.identifier,'MATLAB:badsubscript')
-                    rethrow(err);
-                end
-                warning('FDR estimation failed - not adequate p distro?');
-            end
+            [~,meanres.pfdrthresh(c),~,meanres.pparafdr(outind)] = fdr_bh(...
+                indexdim(meanres.ppara,c,fwedim));
         end
         if nboot > 0
             [meanres.medianboot,meanres.medianste] = bootprctile(...
