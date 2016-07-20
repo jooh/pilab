@@ -8,11 +8,11 @@ getArgs(varargin,{'roiind',1:size(res.cols_roi),...
     'grouptarget','b','errtarget',[],'axisscale',.25,...
     'xscalefactor',6,'resplotfun',@plotbars,'barwidth','adaptive',...
     'fsize',[10,10],'facecolor',[0 .3 .7],'edgecolor',...
-    [0 .3 .7],'groupmarkerstyle','o','groupmarkersize',4,...
+    [1,1,1],'groupmarkerstyle','o','groupmarkersize',4,...
     'groupcolor',[.5 .5 .5],'noiseind',{'rep_lower','rep_upper'},...
     'noisecolor',[.8 .8 .8],'precision',1,'specialval',[],...
     'specialtick',0,'docontrasts',true,'dozerotest',true,...
-    'xticklabels',[],'ptarget','ppara'});
+    'xticklabels',[],'ptarget','ppara','baseline',0,'ylab',''});
 
 % input parsing
 % add additional plot styling fields to res if they don't already exist.
@@ -56,7 +56,8 @@ if any(docontrasts(:))
         nchoosek(nbarall,2),numel(contrastind));
     pcon = asrdmmat(res.(ptarget)(contrastind,roiind));
     if isscalar(docontrasts)
-        docontrasts = zerodiagonal(repmat(docontrasts,size(pcon)));
+        docontrasts = zerodiagonal(repmat(docontrasts,[size(pcon,1),...
+            size(pcon,2)]));
     end
 end
 
@@ -94,7 +95,8 @@ if maxn == 1
     end
 else
     for b = 1:nbargroup
-        off = barwidth*npergroup(b)/2;
+        % half the total width of the arrangement, less half a bar
+        off = barwidth*npergroup(b)/2 - barwidth/2;
         xperbar{b} = xpos(b) + linspace(-off,off,npergroup(b));
     end
     xperbar = cat(2,xperbar{:});
@@ -112,6 +114,10 @@ for r = 1:nroi
     axhand = axes('position',axpos,'tickdir','out','box','off',...
         'xlim',xl,'xtick',xpos,'xcolor',[1 1 1],'ticklength',[.03 .03]);
     hold(axhand,'on');
+    if ~isempty(baseline) && ~isnan(baseline)
+        handles.base = line(xl,[baseline baseline],'linestyle',':',...
+            'color','k','linewidth',.5);
+    end
     if ~isempty(restarget)
         handles.bars = arrayfun(@(ind)bar(xperbar(ind),...
             res.(restarget)(conind(ind),roiind(r)),barwidth,...
@@ -169,8 +175,8 @@ for r = 1:nroi
     end
     outfile{r} = fullfile(figdir,['roidata2figure_' ...
         stripbadcharacters(res.cols_roi{roiind(r)})]);
+    ylabel(ylab)
     printstandard(outfile{r});
-    keyboard;
 end
 close(fighand);
 
@@ -191,7 +197,7 @@ end
 if iscell(con)
     % we are indexing for a group so need to recurse
     for x = 1:numel(con)
-        [con{x},groups{x}] = findconind(con{x});
+        [con{x},groups{x}] = findconind(con{x},rows_contrast);
         groups{x}(:) = x;
     end
     % unpack
