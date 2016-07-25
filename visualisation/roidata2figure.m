@@ -1,22 +1,84 @@
-% TODO: drop in as replacement for rsaglm_plots and repro plots. debug.
-% commit and push. Use for memsamp.
+% Visualise roidata results with one EPS figure per region.
+%
+% INPUTS
+% figdir        path to directory where figures are written
+% res           output from e.g. roidata_rfx
+% groupres      output from e.g. roidata_rfx
+%
+% NAMED INPUTS
+%
+% ARGUMENT          DEFAULT                     DEFINITION
+% roiind            1:numel(res.cols_roi)       ROIs to make figures for
+% conind            1:numel(res.rows_contrast)  conditions to plot (cell of
+%                                                   char or numeric index).
+%                                                   Can be nested cell
+%                                                   array for grouped bars.
+% restarget         ''                          if present draw as bar.
+% grouptarget       ''                          if present draw as marker.
+% errtarget         []                          if present draw as errorbar
+% axisscale         .25                         size of axis in norm figure
+%                                                   units
+% xscalefactor      2.5                         scale width of axis by this
+%                                                   factor. If kept
+%                                                   consistent (along with
+%                                                   fsize and axscale) bars
+%                                                   should be of similar
+%                                                   width across figures
+%                                                   that vary in number of
+%                                                   bars.
+% barwidth          'adaptive'                  scale width of bars to
+%                                                   accommodate the bigger
+%                                                   bar group.
+% fsize             [10,10]                     input for figurebetter.
+% facecolor         [0,.3,.7]                   bar facecolor
+% edgecolor         [1,1,1]                     bar edgecolor
+% groupmarkerstyle  'o'                         single subject marker
+% groupmarkersize   4                           single subject marker size
+% groupfacecolor    [1,1,1]                     single subject facecolor
+% groupedgecolor    [.5,.5,.5]                  single subject edgecolor
+% noiseind          {'rep_lower','rep_upper'}   use to draw a shaded noise
+%                                                   ceiling
+% noisecolor        [.8,.8,.8]                  noise ceiling color
+% precision         1                           scale axis to this number
+%                                                   of significant digits.
+% specialval        []                          roundplotlimits input
+% specialtick       0                           roundplotlimits input
+% docontrasts       true                        draw pairwise comparisons
+%                                                   using contrastlines
+% dozerotest        true                        add p values for each entry
+%                                                   using addptext
+% xticklabels       []                          labels for each x position
+%                                                   (needs to be defined if
+%                                                   using grouped bars)
+% ptarget           'ppara'                     use this field for
+%                                                   inference
+% baseline          0                           draw this value as dashed
+%                                                   line
+% ylab              ''                          ylabel
+% padding           .05                         use this proportion of
+%                                                   range(ylim) of white
+%                                                   space to separate plot
+%                                                   elements
+%
 % handles = roidata2figure(res,groupres,varargin)
 function outfile = roidata2figure(figdir,res,groupres,varargin)
 
-getArgs(varargin,{'roiind',1:size(res.cols_roi),...
-    'conind',1:size(res.rows_contrast),'restarget','mean',...
-    'grouptarget','b','errtarget',[],'axisscale',.25,...
-    'xscalefactor',6,'resplotfun',@plotbars,'barwidth','adaptive',...
+getArgs(varargin,{'roiind',1:numel(res.cols_roi),...
+    'conind',1:numel(res.rows_contrast),'restarget','',...
+    'grouptarget','','errtarget',[],'axisscale',.25,...
+    'xscalefactor',2.5,'barwidth','adaptive',...
     'fsize',[10,10],'facecolor',[0 .3 .7],'edgecolor',...
     [1,1,1],'groupmarkerstyle','o','groupmarkersize',4,...
-    'groupcolor',[.5 .5 .5],'noiseind',{'rep_lower','rep_upper'},...
+    'groupedgecolor',[.5 .5 .5],'groupfacecolor',[1 1 1],...
+    'noiseind',{'rep_lower','rep_upper'},...
     'noisecolor',[.8 .8 .8],'precision',1,'specialval',[],...
     'specialtick',0,'docontrasts',true,'dozerotest',true,...
-    'xticklabels',[],'ptarget','ppara','baseline',0,'ylab',''});
+    'xticklabels',[],'ptarget','ppara','baseline',0,'ylab','',...
+    'padding',.05});
 
 % input parsing
 % add additional plot styling fields to res if they don't already exist.
-stylefields = {'facecolor','edgecolor','groupmarkerstyle','groupmarkersize','groupcolor'};
+stylefields = {'facecolor','edgecolor','groupmarkerstyle','groupmarkersize','groupedgecolor','groupfacecolor'};
 for fn = stylefields
     fnstr = fn{1};
     if ~isfield(res,fnstr)
@@ -46,7 +108,10 @@ xl = [.5 nbargroup+.5];
 % work out contrasts
 if any(docontrasts(:))
     % this is now pretty easy actually
-    contrasts = roidata_allpairwisecontrasts(res.rows_contrast(conind));
+    % we may need to temporarily sort the conind to get the contrast naming to
+    % appear consistent
+    [conind_s,sortind] = sort(conind);
+    contrasts = roidata_allpairwisecontrasts(res.rows_contrast(conind_s));
     % and the set of contrasts is
     contrastind = findconind({contrasts.name},res.rows_contrast);
     % we have to do a bit of checking here because the validity of the
@@ -55,6 +120,9 @@ if any(docontrasts(:))
         'missing pairwise contrasts: should be %d, got %d',...
         nchoosek(nbarall,2),numel(contrastind));
     pcon = asrdmmat(res.(ptarget)(contrastind,roiind));
+    % reverse the sort above to bring the contrast rows and columns back in
+    % register with conind
+    pcon = pcon(sortind,sortind,:);
     if isscalar(docontrasts)
         docontrasts = zerodiagonal(repmat(docontrasts,[size(pcon,1),...
             size(pcon,2)]));
@@ -74,7 +142,7 @@ if ~ieNotDefined('groupres')
     assert(isequal(groupres.rows_contrast(conind),...
         res.rows_contrast(conind)),...
         'res and groupres must have matching contrasts');
-    assert(isfield(groupres,grouptarget),...
+    assert(isempty(grouptarget) || isfield(groupres,grouptarget),...
         'could not find grouptarget in groupres');
 end
 
@@ -137,7 +205,9 @@ for r = 1:nroi
         handles.singles = arrayfun(@(thisg)plot(...
             xperbar(groupind==thisg),singledata(groupind==thisg,:),...
             'marker',groupmarkerstyle,'markersize',groupmarkersize,...
-            'color',groupcolor,'linewidth',1),xpos,'uniformoutput',0);
+            'markerfacecolor',groupfacecolor,...
+            'markeredgecolor',groupedgecolor,...
+            'color',groupedgecolor,'linewidth',.5),xpos,'uniformoutput',0);
         handles.singles = cat(1,handles.singles{:})';
     end
     noise_high = NaN;
@@ -147,7 +217,7 @@ for r = 1:nroi
         handles.noiseceil = errorshade(xl',noise_low * [1; 1],...
             noise_high * [1; 1],noisecolor,0);
         uistack(handles.noiseceil,'bottom');
-        handles.noisetext = text(max(xl) + range(xl)*.05,...
+        handles.noisetext = text(max(xl) + range(xl)*padding,...
             mean([noise_low noise_high]),'noise ceiling',...
             'horizontalalignment','left','verticalalignment','middle');
     end
@@ -160,22 +230,27 @@ for r = 1:nroi
         thispcon(~docontrasts) = NaN;
         [handles.conlines,newy] = contrastlines(gca,...
             zerodiagonal(thispcon),'xpos',xperbar,...
-            'ypos',finaly(2) + range(finaly)*.1);
+            'ypos',finaly(2) + range(finaly)*padding);
+        finaly(2) = max([finaly,newy]);
     end
     if dozerotest
-        handles.ptext = addptext(xperbar,...
-            max([finaly,newy]) + range(finaly)*.1,...
+        [handles.ptext,newy] = addptext(xperbar,...
+            max(finaly) + range(finaly)*padding,...
             res.(ptarget)(conind,roiind(r)),3,true,'rotation',45);
+        finaly(2) = max([finaly(2),newy]);
     end
     if ~isempty(xticklabels)
         handles.xticklabels = text(xpos,...
-            repmat(finaly(1)-.1*range(finaly),size(xpos)),xticklabels,...
-            'rotation',45,...
+            repmat(finaly(1)-padding*range(finaly),size(xpos)),...
+            xticklabels,'rotation',45,...
             'horizontalalignment','right','verticalalignment','middle');
     end
+    handles.tit = text((xl(2)-xl(1))/2+xl(1),max(finaly),...
+        res.cols_roi{roiind(r)},'fontweight','bold',...
+        'horizontalalignment','center','verticalalignment','bottom');
+    ylabel(ylab)
     outfile{r} = fullfile(figdir,['roidata2figure_' ...
         stripbadcharacters(res.cols_roi{roiind(r)})]);
-    ylabel(ylab)
     printstandard(outfile{r});
 end
 close(fighand);
@@ -201,15 +276,15 @@ if iscell(con)
         groups{x}(:) = x;
     end
     % unpack
-    con = horzcat(con{:});
-    groups = horzcat(groups{:});
+    con = vertcat(con{:});
+    groups = vertcat(groups{:});
 else
     % check that con makes sense
     if islogical(con)
         con = find(con);
     end
     assert(isnumeric(con),'conind must be index');
-    groups = 1:numel(con);
+    groups = [1:numel(con)]';
 end
 
 function finaly = sety(hand,noise_high,precision,specialval,specialtick)
