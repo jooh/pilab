@@ -258,7 +258,7 @@ close(fighand);
 % sub function for identifying indices for conditions
 function [con,groups] = findconind(con,rows_contrast)
 
-if isstr(con) && strcmp(lower(con),'nocontrasts')
+if ischar(con) && strcmpi(con,'nocontrasts')
     % remove contrasts
     hits = strfindcell(rows_contrast,'contrast_');
     con = setdiff(1:numel(rows_contrast),hits);
