@@ -51,7 +51,7 @@ ntrials = NaN;
 if isa(designvol,'DesignSpec')
     ntrials = numel(designvol.data(1).conind);
 end
-glman_rdm = rdms_lindisc_configureprocess('glmclass',glmclass,...
+[glman_rdm,cons] = rdms_lindisc_configureprocess('glmclass',glmclass,...
     'glmvarargs',...
     glmvarargs,'cvsplit',cvsplit,'sterrunits',sterrunits,...
     'crossvalidate',crossvalidate,'crosscon',crosscon,'ncon',...
@@ -72,7 +72,7 @@ assert(isequal(epivol.meta.samples.chunks,...
 % you'd think this would make very little difference but the speedup is
 % about 3.5x compared to running permutation tests with this setting still
 % in runrois_spmd and letting Matlab sort out the parallelisation.
-if ~matlabpool('size') || nperms > 1
+if isempty(which('matlabpool')) || ~matlabpool('size') || nperms > 1
     runfun = 'runrois_serial';
 else
     runfun = 'runrois_spmd';
@@ -81,6 +81,16 @@ logstr('running ROIProcessing with %s\n',runfun);
 
 if isempty(split)
     split = ones(epivol.desc.samples.nunique.chunks,1);
+end
+
+metasamples = [];
+if isfield(designvol.meta.features,'labels') && ~isempty(designvol.meta.features.labels)
+    labels = designvol.meta.features.labels;
+    % map on to contrast matrix
+    assert(all(sum(cons~=0,2)==2),'unusual contrasts detected');
+    conlabels = arrayfun(@(x)sprintf('%s_vs_%s',labels{cons(x,:)~=0}),...
+        (1:size(cons,1))','uniformoutput',0);
+    metasamples = struct('labels',{conlabels});
 end
 
 if nargout>2
@@ -127,7 +137,7 @@ end
 meanresult = permres(:,:,1);
 
 % create output volume(s)
-disvol = result2roivol(sl,meanresult,searchvol);
+disvol = result2roivol(sl,meanresult,searchvol,metasamples);
 
 if nargout>2
     for sp = 1:nsplit
