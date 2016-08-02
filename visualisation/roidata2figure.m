@@ -58,6 +58,9 @@
 %                                                   range(ylim) of white
 %                                                   space to separate plot
 %                                                   elements
+% removeunderscore  true                        replace underscores with spaces
+%                                                   before drawing xticklabels
+%                                                   and titles.
 %
 % [handles,xdata,ydata,zdata] = roidata2figure(res,groupres,[varargin])
 function [handles,xdata,ydata,zdata] = roidata2figure(res,groupres,varargin)
@@ -73,17 +76,8 @@ getArgs(varargin,{'roiind',1:numel(res.cols_roi),...
     'noisecolor',[.8 .8 .8],'precision',1,'specialval',[],...
     'specialtick',0,'docontrasts',true,'dozerotest',true,...
     'xticklabels',[],'ptarget','ppara','baseline',0,'ylab','',...
-    'padding',.05});
+    'padding',.05,'removeunderscore',true});
 
-% input parsing
-% add additional plot styling fields to res if they don't already exist.
-stylefields = {'facecolor','edgecolor','groupmarkerstyle','groupmarkersize','groupedgecolor','groupfacecolor'};
-for fn = stylefields
-    fnstr = fn{1};
-    if ~isfield(res,fnstr)
-        res.(fnstr) = repmat({eval(fnstr)},[size(res.rows_contrast,1),1]);
-    end
-end
 
 if iscell(roiind)
     % do intersection to find numerical index
@@ -114,7 +108,7 @@ if any(docontrasts(:))
     % and the set of contrasts is
     contrastind = findconind({contrasts.name},res.rows_contrast);
     % we have to do a bit of checking here because the validity of the
-    % squareform transform hinges on all contrasts actually being present
+    % squareform operation hinges on all contrasts actually being present
     assert(numel(contrastind)==nchoosek(nbarall,2),...
         'missing pairwise contrasts: should be %d, got %d',...
         nchoosek(nbarall,2),numel(contrastind));
@@ -156,21 +150,57 @@ axpos = [axisscale axisscale*1.3 axwidth axisscale];
 % and next we need the exact x coordinate for each individual point
 if maxn == 1
     xperbar = xpos;
-    if ieNotDefined('xticklabels')
+    if isempty(xticklabels)
         % can infer
         xticklabels = res.rows_contrast(conind);
     end
 else
+    % work out bar positioning
     for b = 1:nbargroup
         % half the total width of the arrangement, less half a bar
         off = barwidth*npergroup(b)/2 - barwidth/2;
         xperbar{b} = xpos(b) + linspace(-off,off,npergroup(b));
     end
     xperbar = cat(2,xperbar{:});
+    % if face and edge colour have been left fixed to scalar, do invert over
+    % group
+    if ~isfield(res,'facecolor') && ~isfield(res,'edgecolor')
+        res.facecolor = NaN([size(res.rows_contrast,1),3]);
+        res.edgecolor = NaN([size(res.rows_contrast,1),3]);
+        % so now we want to set the scale like
+        facegrad = arrayfun(@(x)morph(edgecolor,facecolor,x),...
+            linspace(0,1,maxn)','uniformoutput',0);
+        facegrad = vertcat(facegrad{:});
+        edgegrad = arrayfun(@(x)morph(facecolor,edgecolor,x),...
+            linspace(0,1,maxn)','uniformoutput',0);
+        edgegrad = vertcat(edgegrad{:});
+        % now for each group, take however many entries we have and grade them
+        for thisg = xpos
+            congroupind = conind(groupind==thisg);
+            ng = numel(congroupind);
+            res.facecolor(congroupind,:) = facegrad(1:ng,:);
+            res.edgecolor(congroupind,:) = edgegrad(1:ng,:);
+        end
+    end
 end
 
-barfaces = vertcat(res.facecolor{conind});
-baredges = vertcat(res.edgecolor{conind});
+% add additional plot styling fields to res if they don't already exist.
+stylefields = {'facecolor','edgecolor','groupmarkerstyle','groupmarkersize','groupedgecolor','groupfacecolor'};
+for fn = stylefields
+    fnstr = fn{1};
+    if ~isfield(res,fnstr)
+        res.(fnstr) = repmat(eval(fnstr),[size(res.rows_contrast,1),1]);
+    end
+end
+
+if removeunderscore
+    xticklabels = strrep(xticklabels,'_',' ');
+    res.cols_roi = strrep(res.cols_roi,'_',' ');
+    groupres.cols_roi = strrep(groupres.cols_roi,'_',' ');
+end
+
+barfaces = res.facecolor(conind,:);
+baredges = res.edgecolor(conind,:);
 handles = struct('name',res.cols_roi(roiind),...
     'base',[],'bars',[],'errs',[],'singles',[],'noiseceil',[],...
     'noisetext',[],'conlines',[],'ptext',[],...
@@ -221,6 +251,7 @@ for r = 1:nroi
                 'markeredgecolor',groupedgecolor,...
                 'color',groupedgecolor,'linewidth',.5);
         end
+        handles(r).singles = cat(1,handles(r).singles{:});
     end
     zdata(r).noiseceil = NaN;
     if ~isempty(noiseind)
@@ -238,7 +269,7 @@ for r = 1:nroi
             ydata(r).noisetext,'noise ceiling',...
             'horizontalalignment','left','verticalalignment','middle');
     end
-    finaly = sety(cat(1,handles(r).bars,handles(r).errs,handles(r).singles{:}),...
+    finaly = sety(cat(1,handles(r).bars,handles(r).errs,handles(r).singles),...
         zdata(r).noiseceil,precision,specialval,specialtick);
     newy = NaN;
     if any(docontrasts(:))
