@@ -1,14 +1,15 @@
-% Convert the data in a SPM.mat (path or loaded mat file) to epivol and
+% Convert the data in a SPM.mat (char if path or loaded mat file) to epivol and
 % designvol instances for further pilab processing.
 %
-% Named, optional inputs
-% mask
-% ignorelabels
+% OPTIONAL INPUTS
+% mask: see MriVolume
+% ignorelabels: cell array of conditions to ignore
+% blockmode=false: block concatenate runs (false means vertical concat).
 %
 % [epivol,designvol] = spm2vol(SPM,[varargin])
 function [epivol,designvol] = spm2vol(SPM,varargin)
 
-getArgs(varargin,{'mask',[],'ignorelabels',[]});
+getArgs(varargin,{'mask',[],'ignorelabels',[],'blockmode',false});
 
 if ischar(SPM)
     % assume path to mat file
@@ -21,26 +22,33 @@ epivol = SPMVolume(SPM,mask);
 % construct designvol
 X = SPM.xX.X;
 nrun = numel(SPM.Sess);
-names = arrayfun(@(x)x.name{1},SPM.Sess(1).U,...
-  'uniformoutput',false);
-[names,nameind] = setdiff(names,ignorelabels,'stable');
 
-chunks = [];
 for r = 1:nrun
-    % task regressors only
-    colind = SPM.Sess(r).col(1:length(SPM.Sess(r).U));
+    allcolind = SPM.Sess(r).col(1:length(SPM.Sess(r).U));
     % non-nuisance only
-    colind = colind(nameind);
-    % check that regressor names match across runs
-    runnames = arrayfun(@(x)x.name{1},SPM.Sess(r).U,'uniformoutput',0);
-    assert(isequal(names,runnames(nameind)),['regressor names must be ' ...
+    allnames = arrayfun(@(x)x.name{1},SPM.Sess(r).U,...
+      'uniformoutput',false);
+    [names{r},nameind] = setdiff(allnames,ignorelabels,'stable');
+    colind{r} = allcolind(nameind);
+    rowind{r} = SPM.Sess(r).row;
+    chunks{r} = ones(SPM.nscan(r),1) * r;
+end
+chunks = vertcat(chunks{:});
+
+if blockmode
+    % block concatenated design matrix
+    X = X(horzcat(rowind{:}),horzcat(colind{:}));
+    names = vertcat(names{:});
+else
+    % vertical concatenation of design matrix
+    X = arrayfun(@(x)X(rowind{x},colind{x}),1:nrun,'uniformoutput',0);
+    X = vertcat(X{:});
+    % check that names match
+    assert(isequal(names{1},names{:}),['regressor names must be ' ...
         'identical across runs']);
-    runx{r} = X(SPM.Sess(r).row,colind);
-    chunks = [chunks; ones(SPM.nscan(r),1)*r];
+    names = names{1};
 end
 assert(isequal(chunks,epivol.meta.samples.chunks),['mismatched chunks ' ...
     'between epivol and designvol']);
-
-designvol = Volume(vertcat(runx{:}),'metasamples',...
-    struct('chunks',chunks),'metafeatures',struct('labels',{names}),...
-    'frameperiod',SPM.xY.RT);
+designvol = Volume(X,'metasamples',struct('chunks',chunks),...
+    'metafeatures',struct('labels',{names}),'frameperiod',SPM.xY.RT);
