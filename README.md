@@ -2,10 +2,19 @@ This code provides some general tools for univariate and multivariate
 modelling of data in Matlab. The code is angled toward fMRI
 datasets but is sufficiently general to support other use cases too.
 
+# dependencies
+* [johansmatlab](https://github.com/jooh/johansmatlab)
+* [matlab-plotting](https://github.com/jooh/matlab-plotting)
+* [roitools](https://github.com/jooh/roitools)
+* Kendrick Kay's [knkutils](https://github.com/kendrickkay/knkutils)
+
+# optional
+* [spm8](http://www.fil.ion.ucl.ac.uk/spm/software/spm8)
+* [mrTools](http://gru.stanford.edu/doku.php/mrtools/overview)
+
 # a simple demo
-The function below provides a sort of crash course in how to use the code.  The
-visualisations require code from my [plotting
-repository](https://github.com/jooh/matlab-plotting).
+The function below provides a sort of crash course in how to use the code. See
+also the [tutorials](tutorials).
 
 ```
 function pilabdemo()
