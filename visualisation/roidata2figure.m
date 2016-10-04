@@ -54,7 +54,7 @@
 % baseline          0                           draw this value as dashed
 %                                                   line
 % ylab              ''                          ylabel
-% padding           .05                         use this proportion of
+% padding           .04                         use this proportion of
 %                                                   range(ylim) of white
 %                                                   space to separate plot
 %                                                   elements
@@ -76,8 +76,7 @@ getArgs(varargin,{'roiind',1:numel(res.cols_roi),...
     'noisecolor',[.8 .8 .8],'precision',1,'specialval',[],...
     'specialtick',0,'docontrasts',true,'dozerotest',true,...
     'xticklabels',[],'ptarget','ppara','baseline',0,'ylab','',...
-    'padding',.05,'removeunderscore',true});
-
+    'padding',.04,'removeunderscore',true});
 
 if iscell(roiind)
     % do intersection to find numerical index
@@ -302,6 +301,11 @@ for r = 1:nroi
     end
     xdata(r).title = (xl(2)-xl(1))/2+xl(1);
     ydata(r).title = max(finaly);
+    if ~dozerotest
+        % padding is only necessary if we aren't doing the zerotest (since
+        % the reported position of the ptext tends to be generous)
+        ydata(r).title = ydata(r).title + padding*range(finaly);
+    end
     handles(r).title = text(xdata(r).title,ydata(r).title,...
         handles(r).name,'fontweight','bold',...
         'horizontalalignment','center','verticalalignment','bottom');
