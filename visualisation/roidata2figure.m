@@ -142,9 +142,8 @@ end
 % will ensure that panels that differ in bar number have similar bar
 % widths.
 axwidth = axisscale * (nbargroup / xscalefactor);
-% nb slight shift upward because there's usually more additional stuff
-% underneath than above the figure
-axpos = [axisscale axisscale*1.3 axwidth axisscale];
+% position the axes in the center of the figure
+axpos = [axwidth/2-axisscale/2 .5-axisscale/2 axwidth axisscale];
 
 % and next we need the exact x coordinate for each individual point
 if maxn == 1
