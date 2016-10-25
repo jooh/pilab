@@ -14,8 +14,8 @@
 % precision         []              if present, round to precision decimal points
 % precfun           @round          function for rounding (ceil is good for p)
 %
-% res2csv(res,filename,[varargin])
-function res2csv(res,filename,varargin)
+% roidata2csv(res,filename,[varargin])
+function roidata2csv(res,filename,varargin)
 
 getArgs(varargin,{'target','mean',...
     'precision',[],'roitarget',res.cols_roi,'contrasttarget',...
