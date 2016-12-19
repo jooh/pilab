@@ -67,7 +67,7 @@ function [handles,xdata,ydata,zdata] = roidata2figure(res,groupres,varargin)
 
 getArgs(varargin,{'roiind',1:numel(res.cols_roi),...
     'conind',1:numel(res.rows_contrast),'restarget','',...
-    'grouptarget','','errtarget',[],'axisscale',.25,...
+    'grouptarget','','errtarget',[],'axisscale',.2,...
     'xscalefactor',2.5,'barwidth','adaptive',...
     'fsize',[10,10],'facecolor',[0 .3 .7],'edgecolor',...
     [1,1,1],'groupmarkerstyle','o','groupmarkersize',4,...
@@ -142,8 +142,14 @@ end
 % will ensure that panels that differ in bar number have similar bar
 % widths.
 axwidth = axisscale * (nbargroup / xscalefactor);
+if axwidth > .75
+    warning('cannot scale axis appropriately - too many bargroups or wrong xscalefactor')
+    axwidth = .75;
+end
+
 % position the axes in the center of the figure
-axpos = [axwidth/2-axisscale/2 .5-axisscale/2 axwidth axisscale];
+% max operations to stop small figures ending up outside the axis
+axpos = [max(.5-axwidth/2,.2) max(.5-axisscale/2,.2) axwidth axisscale];
 
 % and next we need the exact x coordinate for each individual point
 if maxn == 1
