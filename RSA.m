@@ -220,12 +220,8 @@ classdef RSA < GLM
                 self.npredictors])]);
             % process each run in the new instance
             for r = 1:numel(self)
-                datasample = self(r).datardm(inds,inds,:);
-                modelsample = self(r).Xrdm(inds,inds,:);
-                % make off-diagonal zeros NaN (these then get removed on
-                % RSA class init)
-                datasample(matmask(:,:,1:self(r).nfeatures)) = NaN;
-                modelsample(matmask(:,:,1:self(r).npredictors)) = NaN;
+                datasample = resamplerdm(self(r).datardm,inds);
+                modelsample = resamplerdm(self(r).Xrdm,inds);
                 % create a new instance of whatever class the current
                 % instance is
                 bootglm(r) = feval(class(self),modelsample,datasample);
