@@ -6,13 +6,13 @@
 % Named inputs:
 % nperm: 1 
 % nboot: 0
-% targetfield: 'r'
+% targetfield: ('r') field with relevant data in subres
 % transfun: string that gets feval'ed or a function handle to apply some
 %   transform to the data before doing the rfx analysis (e.g. 'atanh' for
 %   fisher transform, or something like @(x)x-.5 to mean correct proportion
 %   correct classification performance).
-% assumeregister: false (if true, we just stack the single subject results,
-% consequences be damned)
+% assumeregister: (false) assume that all rois are present in the same order in
+%   all subres entries. Speeds things up, and preserves ordering of ROIs.
 % varsmoothmask: []
 % varsmoothfwhm: 8 (mm)
 % keepnans: (false) preserve nan conditions in outputs
@@ -52,14 +52,6 @@ getArgs(varargin,{'nperm',1,'nboot',0,'targetfield','r','transfun',[],...
     'customfits',emptystruct('name','funhand','cons','tail'),'minn',2,...
     'keepnans',false,'multpdim','roi','customfun',[]});
 
-% we assume that contrasts are identical.  we could support
-% this case in theory but let's not for now since it likely
-% indicates a user error.
-concell = {subres.rows_contrast};
-assert(isequal(concell{1},concell{:}),...
-    'different predictors in different subjects');
-ncon = length(concell{1});
-
 if ~iscell(customfun)
     if isempty(customfun)
         customfun = {};
@@ -69,82 +61,7 @@ if ~iscell(customfun)
 end
 ncustom_rfx = numel(customfun);
 
-isgroupres = false;
-nsub = length(subres);
-targets = intersect(fieldnames(subres),...
-    {targetfield,'pperm','ppara','medianboot','medianste',...
-    'nfeatures','tail'});
-if numel(subres)==1 && isfield(subres,'z_subject')
-    % groupres mode
-    isgroupres = true;
-    groupres = subres;
-    names = groupres.z_subject;
-else
-    names = {subres.name};
-    % just take rois from first subject
-    urois = subres(1).cols_roi;
-    if ~assumeregister
-        % find all possible ROIs (not all subjects will have all ROIs
-        % necessarily)
-        allrois = {subres.cols_roi};
-        allrois = horzcat(allrois{:});
-        allurois = unique(allrois);
-        % sort in same order as subject 1's ROIs as far as possible.
-        urois = [urois setdiff(allurois,urois)];
-    end
-    nroi = length(urois);
-    dat = NaN([ncon nroi nsub]);
-    groupres = struct('rows_contrast',{subres(1).rows_contrast},...
-        'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]),...
-        'tail',{subres(1).tail});
-
-    % populate the groupres struct
-    if assumeregister
-        % hey, this is easy
-        groupres = collapsestruct(subres,@zcat);
-        assert(~any(isnan(groupres.(targetfield)(:))),...
-            'nans in targetfield not supported in assumeregister mode');
-    else
-        % have to be careful not to average over different rois
-        for s = 1:nsub
-            for r = 1:length(subres(s).cols_roi)
-                thisroi = subres(s).cols_roi{r};
-                indroi = strcmp(groupres.cols_roi,thisroi);
-                for t = targets(:)'
-                    tstr = t{1};
-                    if strcmp(tstr,'tail')
-                        assert(isequal(groupres.tail,subres.tail),...
-                            'mismatched tails across subjects');
-                    else
-                        groupres.(tstr)(:,indroi,s) = ...
-                            subres(s).(tstr)(:,r);
-                    end
-                end
-            end
-        end
-    end
-end
-
-if isfield(subres,'custom')
-    ncustom = numel(subres(1).custom);
-    groupres.custom = cell(size(subres(1).custom));
-    for s = 1:nsub
-        assert(isequal(ncustom,numel(subres(s).custom)),...
-            'mismatched numel(custom) across subjects');
-        % work out the ROI indices for this subject
-        [~,ginds,sinds] = intersect(groupres.cols_roi,subres(s).cols_roi,...
-            'stable');
-        for c = 1:ncustom
-            assert(ismatrix(subres(s).custom{c}),['>2d custom fields '...
-                'are not supported']);
-            groupres.custom{c} = zcat(groupres.custom{c},...
-                NaN([size(subres(s).custom{c},1),nroi]));
-            % so we make no assumptions about the shape of custom here except
-            % that ROIs are in second dim
-            groupres.custom{c}(:,ginds,end) = subres(s).custom{c}(:,sinds);
-        end
-    end
-end
+groupres = subres2groupres(subres,targetfield,assumeregister);
 
 if ~isempty(transfun)
     if ischar(transfun)
@@ -251,7 +168,8 @@ if any(badroi)
         nroi,minn);
 end
 if any(badcon)
-    logstr('removing %d/%d conditions with no data\n',sum(badcon),ncon);
+    logstr('removing %d/%d conditions with no data\n',sum(badcon),...
+        numel(groupres.rows_contrast));
 end
 
 % drop those rois and cons
@@ -276,11 +194,10 @@ if isfield(groupres,'custom')
 end
 nroi = size(groupres.(targetfield),2);
 ncon = numel(groupres.rows_contrast);
-groupres.z_subject = names;
 
 % now we can get the mean struct 
 meanres = struct('rows_contrast',{groupres.rows_contrast},...
-    'cols_roi',{groupres.cols_roi},'z_subject',{names});
+    'cols_roi',{groupres.cols_roi},'z_subject',{groupres.z_subject});
 meanres.tail = tail;
 meanres.mean = nanmean(groupres.(targetfield),3);
 meanres.n = sum(~isnan(groupres.(targetfield)),3);
@@ -408,8 +325,7 @@ if nperm > 1 || nboot > 0
             end
             try
                 [~,meanres.pfdrthresh(c),~,meanres.pparafdr(c,:)] = fdr_bh(meanres.ppara(c,:));
-            catch
-                err = lasterror;
+            catch err
                 if ~strcmp(err.identifier,'MATLAB:badsubscript')
                     rethrow(err);
                 end
