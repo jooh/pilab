@@ -6,9 +6,8 @@ classdef MrToolsVolume < MriVolume
     methods
         function mrvol = MrToolsVolume(data,mask,varargin)
             % pull out the arguments we need to extract data
-            [arg,val,remargs] = getArgs(varargin,...
-                {'group=MotionComp','scans=all','header',[]},...
-                'verbose=0','suppressUnknownArgMessage=1');
+            [args,remargs] = varargparse(varargin,...
+                struct('group','MotionComp','scans','all','header',[]),true);
             voxsize = [];
             temp.frameperiod = [];
             temp.meta = struct('samples',struct,'features',struct);
@@ -42,7 +41,7 @@ classdef MrToolsVolume < MriVolume
                     temp.meta = Volume.updatemeta(temp.meta,thisdata.meta);
                     % also bring along the mask if possible and needed
                     mask = setifunset(mask,thisdata.mask,true);
-                    header = setifunset(header,thisdata.header);
+                    args.header = setifunset(args.header,thisdata.header);
                     temp.frameperiod = setifunset(temp.frameperiod,...
                         thisdata.frameperiod,true);
                 elseif ischar(thisdata)
@@ -77,39 +76,39 @@ classdef MrToolsVolume < MriVolume
                     mask = [];
 
                     % configure the mrTools session
-                    v = viewSet(v,'currentgroup',group);
+                    v = viewSet(v,'currentgroup',args.group);
                     groupnum = viewGet(v,'currentgroup');
-                    if strcmp(scans,'all')
-                        scans = 1:viewGet(v,'numscans',groupnum);
+                    if strcmp(args.scans,'all')
+                        args.scans = 1:viewGet(v,'numscans',groupnum);
                     end
-                    nscan = numel(scans);
+                    nscan = numel(args.scans);
                     temp.frameperiod = viewGet(v,'frameperiod',scans(1),...
                         groupnum);
                     datamat = [];
                     % load in one go
-                    roit = loadROITSeries(v,maskname,scans,groupnum,...
+                    roit = loadROITSeries(v,maskname,args.scans,groupnum,...
                         'straightXform=1','keepNAN=1');
                     % loadROITSeries sometimes results in messy rows
                     logstr('\n');
                     voxsize = setifunset(voxsize,roit{1}.voxelSize,1);
                     coords = roit{1}.scanCoords;
-                    dims = viewGet(v,'scandims',scans(1),groupnum);
+                    dims = viewGet(v,'scandims',args.scans(1),groupnum);
                     for s = 1:nscan
                         n = size(roit{s}.tSeries,2);
                         % mrTools quietly returns no data if you enter an
                         % invalid scan number (e.g. greater than the number
                         % of available scans).
                         assert(n>0,'no tSeries data for scan %d\n',...
-                            scans(s));
-                        chunks = [chunks; ones(n,1)*scans(s)];
+                            args.scans(s));
+                        chunks = [chunks; ones(n,1)*args.scans(s)];
                         datamat = [datamat; roit{s}.tSeries'];
                         % add volume number for spm_vol compatibility
                         filenames = [filenames; mat2strcell((1:n)',...
-                            [viewGet(v,'tseriespath',scans(s),groupnum) ',%d'])];
+                            [viewGet(v,'tseriespath',args.scans(s),groupnum) ',%d'])];
                         % check that coordinates are matched across scans
                         coords = setifunset(coords,roit{s}.scanCoords,1);
                     end
-                    header = setifunset(header,...
+                    args.header = setifunset(args.header,...
                         spm_vol(filenames{1}),false);
                     % drop nans
                     nanind = any(isnan(datamat),1);
@@ -168,13 +167,16 @@ classdef MrToolsVolume < MriVolume
                 temp.meta.samples.chunks = chunks;
             end
 
-            % anyway, at the end of all this...
-            args = {'header',header,'voxsize',voxsize};
-            args = [args remargs{:}];
-            if ~isempty([fieldnames(temp.meta.features); fieldnames(temp.meta.samples)])
-                args = [args {'meta',temp.meta}];
+            remargs.header = args.header;
+            if ~isfield(remargs,'voxsize')
+                remargs.voxsize = voxsize;
             end
-            mrvol = mrvol@MriVolume(outdata,mask,args{:});
+            remargs.voxsize = setifunset(remargs.voxsize,voxsize);
+            if ~isempty([fieldnames(temp.meta.features); fieldnames(temp.meta.samples)])
+                remargs.meta = temp.meta;
+            end
+            remargs = structfields2varargs(remargs);
+            mrvol = mrvol@MriVolume(outdata,mask,remargs{:});
 
             mrvol.sessiondir = temp.sessiondir;
             % ensure that if the user specified a custom frameperiod, it

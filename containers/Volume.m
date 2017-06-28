@@ -78,25 +78,26 @@ classdef Volume < handle
         % instancing.
         %
         % self = initialisemeta(self,varargin)
-            getArgs(varargin,{'metasamples',self.standardstruct,...
-                'metafeatures',self.standardstruct,'meta',[],...
-                'frameperiod',[]},...
-                'verbose=0','suppressUnknownArgMessage=1');
-            self.frameperiod = frameperiod;
+            args = varargparse(varargin,...
+                struct('metasamples',self.standardstruct,...
+                'metafeatures',self.standardstruct,...
+                'meta',[],...
+                'frameperiod',[]),true);
+            self.frameperiod = args.frameperiod;
             % insure meta samples and features contain mandatory
             % fields from self.standardstruct
             self.meta.samples = self.standardstruct;
             self.meta.features = self.standardstruct;
             % update with metafeatures/metasamples
-            self.meta.samples = catstruct(self.meta.samples,metasamples);
+            self.meta.samples = catstruct(self.meta.samples,args.metasamples);
             self.meta.features = catstruct(self.meta.features,...
-                metafeatures);
+                args.metafeatures);
             % update with meta
-            if ~isempty(meta)
+            if ~isempty(args.meta)
                 self.meta.samples = catstruct(self.meta.samples,...
-                    meta.samples);
+                    args.meta.samples);
                 self.meta.features = catstruct(self.meta.features,...
-                    meta.features);
+                    args.meta.features);
             end
             % insure that meta samples are in rows and meta features in
             % columns
@@ -179,17 +180,14 @@ classdef Volume < handle
             validsamp = fieldnames(self.meta.samples);
             validfeat = fieldnames(self.meta.features);
             valid = union(validsamp,validfeat);
-            getArgs(varargin,valid);
+            [~,args] = varargparse(varargin,struct,true);
+            used = intersect(valid,fieldnames(args));
             % begin by assuming you want everything
             sampind = true(self.nsamples,1);
             featind = true(1,self.nfeatures);
-            for v = valid'
+            for v = used'
                 vstr = v{1};
-                % skip if not passed as input
-                if ieNotDefined(vstr)
-                    continue
-                end
-                value = eval(vstr);
+                value = args.(vstr);
                 % check that the field is in samples and is not empty
                 insamp = isfield(self.meta.samples,vstr) && ...
                     ~isempty(self.meta.samples.(vstr));

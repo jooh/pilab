@@ -41,21 +41,20 @@ classdef MriVolume < Volume
             % instance from Base class
             mrivol = mrivol@Volume(data,varargin{:});
             % then any non-base class inputs
-            getArgs(varargin,{'header',[],'voxsize',[]},'verbose=0',...
-                'suppressUnknownArgMessage=1');
+            args = varargparse(varargin,struct('header',[],'voxsize',[]),true);
             if isa(data,'MriVolume')
                 mask = setifunset(mask,data.mask,true);
-                header = setifunset(header,data.header);
-                voxsize = setifunset(voxsize,data.voxsize);
+                args.header = setifunset(args.header,data.header);
+                args.voxsize = setifunset(args.voxsize,data.voxsize);
             end
             if isa(mask,'MriVolume')
                 % interesting!
-                header = setifunset(header,mask.header,true);
-                voxsize = setifunset(mask.voxsize,true);
+                args.header = setifunset(args.header,mask.header,true);
+                args.voxsize = setifunset(mask.voxsize,true);
                 mask = mask.mask;
             end
-            [mrivol.header,mrivol.voxsize,mrivol.mask] = deal(header,...
-                voxsize,mask);
+            [mrivol.header,mrivol.voxsize,mrivol.mask] = deal(args.header,...
+                args.voxsize,mask);
             % transpose because find returns a column vector and we want
             % our samples in rows
             mrivol.linind = find(mrivol.mask)';
