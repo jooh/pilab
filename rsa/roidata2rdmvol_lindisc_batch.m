@@ -72,7 +72,7 @@ assert(isequal(epivol.meta.samples.chunks,...
 % you'd think this would make very little difference but the speedup is
 % about 3.5x compared to running permutation tests with this setting still
 % in runrois_spmd and letting Matlab sort out the parallelisation.
-if isempty(which('matlabpool')) || ~matlabpool('size') || nperms > 1
+if ~hasparpool || nperms > 1
     runfun = 'runrois_serial';
 else
     runfun = 'runrois_spmd';
