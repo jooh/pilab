@@ -63,7 +63,7 @@ classdef ROIProcessor < MetaProcessor
         %
         % vol = result2roivol(self,result,[searchvol=false],[metasamples])
             if ieNotDefined('metasamples')
-                metasamples = [];
+                metasamples = struct;
             end
             if ieNotDefined('searchvol')
                 searchvol = false;
