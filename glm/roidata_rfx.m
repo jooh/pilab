@@ -61,7 +61,7 @@ if ~iscell(customfun)
 end
 ncustom_rfx = numel(customfun);
 
-groupres = subres2groupres(subres,targetfield,assumeregister);
+[groupres,targets] = subres2groupres(subres,targetfield,assumeregister);
 
 if ~isempty(transfun)
     if ischar(transfun)
@@ -165,7 +165,7 @@ assert(all(r(~badcon)),...
 badroi = n(firstvalidcon,:) < minn;
 if any(badroi)
     logstr('removing %d/%d rois with sample size <%d\n',sum(badroi),...
-        nroi,minn);
+        numel(badroi),minn);
 end
 if any(badcon)
     logstr('removing %d/%d conditions with no data\n',sum(badcon),...
@@ -188,7 +188,7 @@ for t = targets(:)'
     end
 end
 if isfield(groupres,'custom')
-    for c = 1:ncustom
+    for c = 1:numel(groupres.custom)
         groupres.custom{c} = indexdim(groupres.custom{c},~badroi,2);
     end
 end
