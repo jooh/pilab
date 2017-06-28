@@ -9,8 +9,8 @@
 % assumeregister: (false) assume that all rois are present in the same order in
 %   all subres entries. Speeds things up, and preserves ordering of ROIs.
 %
-% groupres = subres2groupres(subres,targetfield='r',assumeregister=false)
-function groupres = subres2groupres(subres,targetfield,assumeregister)
+% [groupres,targets] = subres2groupres(subres,targetfield='r',assumeregister=false)
+function [groupres,targets] = subres2groupres(subres,targetfield,assumeregister)
 
 % input check
 if ~exist('targetfield','var') || isempty(targetfield)
@@ -53,19 +53,20 @@ if ~assumeregister
 end
 nroi = length(urois);
 nsub = length(subres);
-dat = NaN([ncon nroi nsub]);
-groupres = struct('rows_contrast',{subres(1).rows_contrast},...
-    'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]),...
-    'tail',{subres(1).tail},'z_subject',{{subres.name}});
-
 % populate the groupres struct
 if assumeregister
     % hey, this is easy
     groupres = collapsestruct(subres,@zcat);
+    groupres.z_subject = {subres.name};
+    % just need to be careful with the name field
     assert(~any(isnan(groupres.(targetfield)(:))),...
         'nans in targetfield not supported in assumeregister mode');
 else
     % have to be careful not to average over different rois
+    dat = NaN([ncon nroi nsub]);
+    groupres = struct('rows_contrast',{subres(1).rows_contrast},...
+        'cols_roi',{urois},targetfield,dat,'nfeatures',NaN([1 nroi nsub]),...
+        'tail',{subres(1).tail},'z_subject',{{subres.name}});
     for s = 1:nsub
         for r = 1:length(subres(s).cols_roi)
             thisroi = subres(s).cols_roi{r};
