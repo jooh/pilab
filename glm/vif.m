@@ -7,6 +7,10 @@
 % VIF=inf for rank deficient designs, but you in practice will likely obtain huge
 % values instead from this function due to the instability of Matlab inv.
 %
+% See also: designefficiency
+%
+% 20171003 J Carlin
+%
 % v = vif(X)
 function v = vif(X)
 
