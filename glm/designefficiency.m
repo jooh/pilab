@@ -16,4 +16,4 @@ function eff = designefficiency(X,c)
 assert(size(X,2) == size(c,2),...
     'contrast vector c must have same number of columns as the design matrix X')
 
-eff = diag(c * inv(X'*X) * c');
+eff = diag(c * inv(X' * X) * c').^-1;
