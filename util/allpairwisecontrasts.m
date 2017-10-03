@@ -1,3 +1,7 @@
+% vectors for all pairwise contrasts given n conditions. For a version with
+% labels, see roidata_allpairwisecontrasts.
+%
+% c = allpairwisecontrasts(n)
 function c = allpairwisecontrasts(n)
 
 % number of contrasts by number of regressors
