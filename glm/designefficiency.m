@@ -1,5 +1,5 @@
-% return the design efficiency for each contrast (row) in c given the
-% (convolved, filtered) design matrix X. 
+% return the design efficiency for the contrasts (rows) in c given the
+% (convolved, filtered) design matrix X.
 %
 % Given a fixed noise level, design efficiency is monotonically (but not
 % linearly) related to the standard error of the contrast estimate. So design
@@ -16,4 +16,4 @@ function eff = designefficiency(X,c)
 assert(size(X,2) == size(c,2),...
     'contrast vector c must have same number of columns as the design matrix X')
 
-eff = diag(c * inv(X' * X) * c').^-1;
+eff = trace(c * inv(X' * X) * c')^-1;
