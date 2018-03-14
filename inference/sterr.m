@@ -4,7 +4,7 @@
 % y = sterr(data,dim);
 function y = sterr(data,dim);
 
-if ieNotDefined('dim')
+if ~exist('dim','var') || isempty(dim)
     dim = 1;
 end
 
