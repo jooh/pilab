@@ -206,18 +206,6 @@ classdef RSA < GLM
                 'derived class instead']);
             assert(all(all(vertcat(self.data)~=0)),...
                 'cannot sample when zeros are present in data');
-            % this approach assumes that zeros only happen in the data
-            % dissimilarities when diagonals have been resampled to
-            % off-diagonal positions
-            % find zeros in the boot sampled rdm mat - ie, diagonals that
-            % moved.
-            matmask = self(1).datardm(inds,inds,1)==0;
-            % skip true diagonals
-            matmask(logical(eye(size(matmask,1)))) = 0;
-            % pre-allocate to biggest needed size so we can later just
-            % slice for speed
-            matmask = repmat(matmask,[1 1 max([self.nfeatures ...
-                self.npredictors])]);
             % process each run in the new instance
             for r = 1:numel(self)
                 datasample = resamplerdm(self(r).datardm,inds);
