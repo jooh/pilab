@@ -83,7 +83,6 @@ spmd
             % empty or too small roi
             continue
         end
-        % TODO - fix input args for GLMConstructor
         [batchresult{b,retind}] = call(Cbatchprocessor,...
             Cbatchdata(:,Cbatchfeat(b,:)),varargin{:});
     end
