@@ -14,7 +14,13 @@
 %                                                   array for grouped bars.
 % restarget         ''                          if present draw as bar.
 % grouptarget       ''                          if present draw as marker.
-% errtarget         []                          if present draw as errorbar
+% errtarget         []                          if present draw as errorbar. If
+%                                                   cell with 2 entries, use to
+%                                                   draw upper and lower bounds
+%                                                   in absolute units
+%                                                   (otherwise, assume error can
+%                                                   be added/subtracted from
+%                                                   mean)
 % axisscale         .25                         size of axis in norm figure
 %                                                   units
 % xscalefactor      2.5                         scale width of axis by this
@@ -78,6 +84,10 @@ getArgs(varargin,{'roiind',1:numel(res.cols_roi),...
     'xticklabels',[],'ptarget','ppara','baseline',0,'ylab','',...
     'padding',.04,'removeunderscore',true});
 
+if ~exist('groupres','var')
+    groupres = [];
+end
+
 if iscell(roiind)
     % do intersection to find numerical index
     [~,~,roiind] = intersect(roiind,res.cols_roi,'stable');
@@ -128,7 +138,7 @@ if strcmp(barwidth,'adaptive')
     barwidth = .6 / maxn;
 end
 
-if ~ieNotDefined('groupres')
+if ~isempty(groupres)
     assert(isequal(groupres.cols_roi(roiind),res.cols_roi(roiind)),...
         'res and groupres must have matching ROIs');
     assert(isequal(groupres.rows_contrast(conind),...
@@ -200,7 +210,9 @@ end
 if removeunderscore
     xticklabels = strrep(xticklabels,'_',' ');
     res.cols_roi = strrep(res.cols_roi,'_',' ');
-    groupres.cols_roi = strrep(groupres.cols_roi,'_',' ');
+    if ~isempty(groupres)
+        groupres.cols_roi = strrep(groupres.cols_roi,'_',' ');
+    end
 end
 
 barfaces = res.facecolor(conind,:);
@@ -234,11 +246,24 @@ for r = 1:nroi
     end
     if ~isempty(errtarget)
         xdata(r).errs = xperbar;
-        ydata(r).errs = res.(restarget)(conind,roiind(r));
-        zdata(r).errs = res.(errtarget)(conind,roiind(r));
-        handles(r).errs = errorbar(xdata(r).errs,ydata(r).errs,...
-            zdata(r).errs,'linestyle','none',...
-            'color',[0 0 0],'linewidth',.5);
+        if iscell(errtarget)
+            assert(numel(errtarget)==2,...
+                '2 entries are assumed if errtarget is cell');
+            ydata(r).errs = res.(errtarget{1})(conind,roiind(r)) - ...
+                res.(restarget)(conind,roiind(r));
+            zdata(r).errs = res.(errtarget{2})(conind,roiind(r)) - ...
+                res.(restarget)(conind,roiind(r));
+            handles(r).errs = errorbar(xdata(r).errs,...
+                res.(restarget)(conind,roiind(r)),...
+                ydata(r).errs,zdata(r).errs,'linestyle','none',...
+                'color',[0 0 0],'linewidth',.5);
+        else
+            ydata(r).errs = res.(restarget)(conind,roiind(r));
+            zdata(r).errs = res.(errtarget)(conind,roiind(r));
+            handles(r).errs = errorbar(xdata(r).errs,ydata(r).errs,...
+                zdata(r).errs,'linestyle','none',...
+                'color',[0 0 0],'linewidth',.5);
+        end
         arrayfun(@errorbar_tick,handles(r).errs(:),...
             zeros(numel(handles(r).errs),1));
     end
@@ -268,7 +293,7 @@ for r = 1:nroi
             ydata(r).noiseceil,zdata(r).noiseceil,noisecolor,0);
         uistack(handles(r).noiseceil,'bottom');
         xdata(r).noisetext = max(xl) + range(xl)*padding;
-        ydata(r).noisetext = mean([ydata(r).noiseceil zdata(r).noiseceil]);
+        ydata(r).noisetext = mean([ydata(r).noiseceil(1) zdata(r).noiseceil(1)]);
         handles(r).noisetext = text(xdata(r).noisetext,...
             ydata(r).noisetext,'noise ceiling',...
             'horizontalalignment','left','verticalalignment','middle');
@@ -353,7 +378,7 @@ end
 function finaly = sety(hand,noise_high,precision,specialval,specialtick)
 
 ydata = getdatalims(hand,'y');
-ydata(2) = max([ydata(2),noise_high]);
+ydata(2) = max([ydata(2),noise_high(:)']);
 ylim(ydata);
 finaly = roundplotlimits(gca,'y',specialval,precision);
 minimalticks(gca,'y',specialtick,precision);
