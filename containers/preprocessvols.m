@@ -122,8 +122,14 @@ else
         targetlabels));
 end
 if ~isempty(ignorelabels)
+    if iscell
+        for this_label = 1:length(ignorelabels)
+            ignoreinds(this_label) = find(strcmp(designvol.meta.features.labels,ignorelabels{this_label}));
+        end
+    else
     ignoreinds = find(strcmp(designvol.meta.features.labels,...
         ignorelabels));
+    end
     coninds = setdiff(coninds,ignoreinds,'stable');
 end
 assert(~isempty(coninds),...
