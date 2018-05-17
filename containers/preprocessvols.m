@@ -122,7 +122,7 @@ else
         targetlabels));
 end
 if ~isempty(ignorelabels)
-    if iscell
+    if iscell(ignoreinds)
         for this_label = 1:length(ignorelabels)
             ignoreinds(this_label) = find(strcmp(designvol.meta.features.labels,ignorelabels{this_label}));
         end
