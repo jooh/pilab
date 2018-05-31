@@ -29,6 +29,9 @@
 %                                   for rapid ER designs.
 %
 % [datavol,designvol] = preprocessvols(datavol,designvol,varargin)
+% Modified by TEC 17/5/18 to allow multiple ignoreinds as a cell array
+% Modified by JC and TEC 31/5/18 to allow design volume changes only
+
 function [datavol,designvol] = preprocessvols(datain,designin,varargin)
 
 getArgs(varargin,{'matchn',false,'covariatedeg','',...
@@ -38,11 +41,20 @@ getArgs(varargin,{'matchn',false,'covariatedeg','',...
 
 % need to make a copy of each volume here, otherwise changes are made in
 % place, quietly, in some cases.
-datavol = datain(:,1:end);
+
+hasdata = true;
+if ~exist('datain','var') || isempty(datain)
+    hasdata = false;
+end
+
+if hasdata
+    datavol = datain(:,1:end);
+    assert(strcmp(class(datavol),class(datain)),'indexing broke data class')
+end
 designvol = designin(:,1:end);
 % this test shouldn't be here but there have historically been problems
 % with this kind of stuff so let's just be extra sure.
-assert(strcmp(class(datavol),class(datain)),'indexing broke data class')
+
 assert(strcmp(class(designvol),class(designin)),...
     'indexing broke data class')
 
@@ -71,9 +83,11 @@ if matchn
 end
 
 if percentsignal
-    logstr('scaling data to percent signal change\n');
-    % scale epi by 100 * mean per voxel
-    filterbychunk(datavol,@(x)100*bsxfun(@rdivide,x,mean(x)));
+    logstr('scaling data to percent signal change\n'); 
+    if hasdata
+        %scale epi by 100 * mean per voxel
+        filterbychunk(datavol,@(x)100*bsxfun(@rdivide,x,mean(x)));
+    end
     % scale design matrix by global max (so the peak across the design
     % matrix is 1)
     filterbychunk(designvol,@(x)bsxfun(@rdivide,x,max(x(:))));
@@ -81,86 +95,93 @@ end
 
 % de-trend config
 if strcmp(covariatedeg,'adaptive')
-    covariatedeg = vol2covdeg(datavol);
+    % does this work without datavol?
+    covariatedeg = vol2covdeg(designvol);
 end
 
 % first high-pass trend removal
 if ~isempty(covariatedeg)
     logstr('polynomial detrend (degree=%.0f)\n',covariatedeg);
-    filterbychunk(datavol,'polydetrend',covariatedeg);
+    if hasdata
+        filterbychunk(datavol,'polydetrend',covariatedeg);
+    end
     filterbychunk(designvol,'polydetrend',covariatedeg);
 end
 
 if ~isempty(domedianfilter) && domedianfilter
     logstr('median filter (n=%.0f)\n',domedianfilter);
-    filterbychunk(datavol,'medianfilter',domedianfilter);
+    if hasdata
+        filterbychunk(datavol,'medianfilter',domedianfilter);
+    end
     filterbychunk(designvol,'medianfilter',domedianfilter);
 end
 
 if sgdetrend
     logstr('Savitzky-Golay detrend (k=%.0f,f=%.0f)\n',...
         sgolayK,sgolayF);
-    % insure double
-    datavol.data = double(datavol.data);
-    designvol.data = double(designvol.data);
-    sgdetrend(datavol,sgolayK,sgolayF);
+    % ensure double
+    if hasdata
+        datavol.data = double(datavol.data);
+        sgdetrend(datavol,sgolayK,sgolayF);
+    end
+    designvol.data = double(designvol.data);    
     sgdetrend(designvol,sgolayK,sgolayF);
 end
 
 if dozscore
     logstr('Z-scoring samples\n')
-    filterbychunk(datavol,'zscore',[],1);
+    if hasdata
+        filterbychunk(datavol,'zscore',[],1);
+    end
     filterbychunk(designvol,'zscore',[],1);
 end
 
-% maybe deal with covariates
-nlabels = length(designvol.desc.features.unique.labels);
-if isempty(targetlabels)
-    coninds = 1:nlabels;
-else
-    coninds = find(strcmp(designvol.desc.features.unique.labels,...
-        targetlabels));
-end
-if ~isempty(ignorelabels)
-    if iscell(ignorelabels)
-        for this_label = 1:length(ignorelabels)
-            ignoreinds(this_label) = find(strcmp(designvol.meta.features.labels,ignorelabels{this_label}));
-        end
-    else
-    ignoreinds = find(strcmp(designvol.meta.features.labels,...
-        ignorelabels));
-    end
-    coninds = setdiff(coninds,ignoreinds,'stable');
-end
-assert(~isempty(coninds),...
-    'found no labels matching targetlabels/ignorelabels %s/%s',...
-    targetlabels,ignorelabels);
-if ~isequal(coninds,1:nlabels)
-    covariates = designvol.data(:,ignoreinds);
+% handle selecting labels
+if ~isempty(targetlabels)
+    [~,~,coninds] = intersect(targetlabels, designvol.meta.features.labels, ...
+        'stable');
+    assert(~isempty(coninds),...
+    'found no labels matching targetlabels %s',cell2str(targetlabels));
     designvol = designvol(:,coninds);
-    % project out bad cons
-    if ~isempty(ignoreinds)
-        logstr('projecting out %d covariates\n',...
-            size(covariates,2));
-        for c = 1:datavol.desc.samples.nunique.chunks
-            chunkind = datavol.meta.samples.chunks == ...
-                datavol.desc.samples.unique.chunks(c);
+end
+
+% handle removing and projecting out labels
+if ~isempty(ignorelabels)
+    % things to project out
+    [~,covinds] = intersect(designvol.meta.features.labels, ...
+        ignorelabels,'stable');
+    assert(~isempty(covinds), 'no labels matching ignorelabels %s', ...
+        cell2str(ignorelabels));
+    
+    % things to keep
+    [~,keepinds] = setdiff(designvol.meta.features.labels, ...
+        ignorelabels,'stable');
+    
+    covariates = designvol.data(:,covinds);
+    designvol = designvol(:,keepinds);
+    logstr('projecting out %d covariates\n',size(covariates,2));
+    for c = 1:designvol.desc.samples.nunique.chunks
+        chunkind = designvol.meta.samples.chunks == ...
+            designvol.desc.samples.unique.chunks(c);
+        if hasdata
             assert(isequal(chunkind,...
-                designvol.meta.samples.chunks == ...
+                datavol.meta.samples.chunks == ...
                 designvol.desc.samples.unique.chunks(c)),...
                 'mismatched chunks in datavol and designvol');
             datavol.data(chunkind,:) = projectout(...
                 datavol.data(chunkind,:),covariates(chunkind,:));
-            designvol.data(chunkind,:) = projectout(...
-                designvol.data(chunkind,:),covariates(chunkind,:));
         end
+        designvol.data(chunkind,:) = projectout(...
+            designvol.data(chunkind,:),covariates(chunkind,:));
     end
 end
 
 % now set class last - so maximal precision for pre-processing
 if ~isempty(setclass)
     logstr('setting data to %s\n',setclass);
-    datavol.data = feval(setclass,datavol.data);
+    if hasdata
+        datavol.data = feval(setclass,datavol.data);
+    end
     designvol.data = feval(setclass,designvol.data);
 end
 
@@ -170,4 +191,8 @@ if ~isempty(resortind)
     end
     logstr('resorting regressors in designvol.\n');
     designvol = designvol(:,resortind);
+end
+
+if ~hasdata
+    datavol = [];
 end
