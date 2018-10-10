@@ -682,10 +682,7 @@ classdef GLM < Saveable
             sa = covdiag(residuals(self));
             varargout = cell(1,nargout);
             for n = 1:length(varargout)
-                % unit length transform each weight vector to ensure
-                % discriminant outputs are in test data units.
-                varargout{n} = unitlen(...
-                    (contrast(self,varargin{n}) / sa)')';
+                varargout{n} = contrast(self,varargin{n}) / sa;
             end
         end
 
