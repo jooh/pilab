@@ -36,27 +36,33 @@
 % function [disvol,permres,splitdisvolcell,sesspermres] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
 function [disvol,permres,splitdisvolcell,sesspermres] = roidata2rdmvol_lindisc_batch(rois,designvol,epivol,varargin)
 
-getArgs(varargin,{'split',[],'glmvarargs',{},'cvsplit',[],...
+arg = varargparse(varargin,struct('split',[],'glmvarargs',{{}},'cvsplit',[],...
     'glmclass','GLM','sterrunits',0,'crossvalidate',1,...
     'searchvol',false,'crosscon',[],'minn',0,...
-    'demean',false,'nperms',0,'onewayvalidation',false});
+    'demean',false,'nperms',0,'onewayvalidation',false));
 
 % construct the RDM analysis
-if isempty(cvsplit)
-    cvsplit = 1:epivol.desc.samples.nunique.chunks;
-    assert(isempty(split),'cvsplit must be provided if split is defined');
+if ischar(arg.cvsplit)
+    arg.cvsplit = feval(arg.cvsplit,designvol);
+end
+
+if isempty(arg.cvsplit)
+    assert(isempty(arg.split),'cvsplit must be provided if split is defined');
+    % we can infer
+    arg.cvsplit = 1:epivol.desc.samples.nunique.chunks;
 end
 
 ntrials = NaN;
 if isa(designvol,'DesignSpec')
     ntrials = numel(designvol.data(1).conind);
 end
-[glman_rdm,cons] = rdms_lindisc_configureprocess('glmclass',glmclass,...
+
+[glman_rdm,cons] = rdms_lindisc_configureprocess('glmclass',arg.glmclass,...
     'glmvarargs',...
-    glmvarargs,'cvsplit',cvsplit,'sterrunits',sterrunits,...
-    'crossvalidate',crossvalidate,'crosscon',crosscon,'ncon',...
-    designvol.nfeatures,'setclass',class(epivol.data),'demean',demean,...
-    'nperms',nperms,'onewayvalidation',onewayvalidation,'ntrials',ntrials);
+    arg.glmvarargs,'cvsplit',arg.cvsplit,'sterrunits',arg.sterrunits,...
+    'crossvalidate',arg.crossvalidate,'crosscon',arg.crosscon,'ncon',...
+    designvol.nfeatures,'setclass',class(epivol.data),'demean',arg.demean,...
+    'nperms',arg.nperms,'onewayvalidation',arg.onewayvalidation,'ntrials',ntrials);
 
 if isfield(epivol,'xyz')
     % support non-MriVolumes
@@ -72,15 +78,15 @@ assert(isequal(epivol.meta.samples.chunks,...
 % you'd think this would make very little difference but the speedup is
 % about 3.5x compared to running permutation tests with this setting still
 % in runrois_spmd and letting Matlab sort out the parallelisation.
-if ~hasparpool || nperms > 1
+if ~hasparpool || arg.nperms > 1
     runfun = 'runrois_serial';
 else
     runfun = 'runrois_spmd';
 end
 logstr('running ROIProcessing with %s\n',runfun);
 
-if isempty(split)
-    split = ones(epivol.desc.samples.nunique.chunks,1);
+if isempty(arg.split)
+    arg.split = ones(epivol.desc.samples.nunique.chunks,1);
 end
 
 metasamples = [];
@@ -95,12 +101,12 @@ end
 
 if nargout>2
     % split the data into appropriately pre-processed cell arrays
-    [designcell,epicell] = splitvol(split,designvol,epivol);
+    [designcell,epicell] = splitvol(arg.split,designvol,epivol);
     nsplit = length(designcell);
     sesspermres = cell(nsplit,1);
     % track NaN features - may appear in different runs if nan masking
     nanmask = cell(nsplit,1);
-    sl = ROIProcessor(rois,glman_rdm,minn,runfun);
+    sl = ROIProcessor(rois,glman_rdm,arg.minn,runfun);
     for sp = 1:nsplit
         logstr('running rois for split %d of %d...\n',sp,nsplit);
         tstart = clock;
@@ -122,10 +128,10 @@ if nargout>2
 else
     % can just build everything into one processor. This tends to be faster
     % because it puts more processing inside each parfor job.
-    if unique(split)>1
-        glman_rdm = SessionProcessor(split,glman_rdm);
+    if unique(arg.split)>1
+        glman_rdm = SessionProcessor(arg.split,glman_rdm);
     end
-    sl = ROIProcessor(rois,glman_rdm,minn,runfun);
+    sl = ROIProcessor(rois,glman_rdm,arg.minn,runfun);
     logstr('running all rois... ')
     tstart = clock;
     permres = call(sl,epivol.data,designvol.data,...
@@ -137,13 +143,13 @@ end
 meanresult = permres(:,:,1);
 
 % create output volume(s)
-disvol = result2roivol(sl,meanresult,searchvol,metasamples);
+disvol = result2roivol(sl,meanresult,arg.searchvol,metasamples);
 
 if nargout>2
     for sp = 1:nsplit
         % make sure nans are consistent
         sesspermres{sp}(:,anynan,:) = NaN;
         splitdisvolcell{sp} = result2roivol(sl,sesspermres{sp}(:,:,1),...
-            searchvol);
+            arg.searchvol);
     end
 end
