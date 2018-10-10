@@ -757,7 +757,7 @@ classdef GLM < Saveable
         %
         % [dist,p] = infoc(self,w,conmat)
             c = contrast(self,conmat);
-            dist = diag(c * w');
+            dist = sum(c .* w, 2);
             if nargout > 1
                 % obtain p value by t test
                 [~,p] = infot(self,w,conmat);
