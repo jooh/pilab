@@ -1,8 +1,7 @@
-% obscure helper function for splitting a set of volume instances into cell
-% arrays as defined by the first input (split). You can enter any number of
-% volumes and you will get the same number of cell arrays back.
-%
-% This is used in e.g. vol2glm_batch and roiglm2rdmvol.
+% helper function for splitting a set of volume instances into cell arrays as
+% defined by the first input (split, which is a set of indices, or a char that
+% gets fevaled with varargin{:} as input). You can enter any number of volumes
+% and you will get the same number of cell arrays back.
 %
 % varargout = splitvol(split,varargin)
 function varargout = splitvol(split,varargin)
@@ -15,7 +14,7 @@ if isempty(split)
     % just one global split
     split = ones(1,nchunk);
 elseif ischar(split)
-    split = eval(split);
+    split = feval(split,varargin{:});
 end
 usplit = unique(split);
 % support skipping some chunks completely

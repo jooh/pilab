@@ -160,7 +160,7 @@ end
 
 if ~isempty(resortind)
     if ischar(resortind)
-        resortind = feval(resortind,designvol.nfeatures);
+        resortind = feval(resortind,designvol.meta.features.labels);
     end
     logstr('resorting regressors in designvol.\n');
     designvol = designvol(:,resortind);
