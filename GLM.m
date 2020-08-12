@@ -733,11 +733,6 @@ classdef GLM < Saveable
         % linear discriminant contrast estimate - ie, the distance between
         % the contrasted conditions along the discriminant dimension. 
         %
-        % Note that the units of the data are only preserved if the weights
-        % vector is set to unit length and the contrast vector's absolute
-        % values from the positive and negative elements of each contrast
-        % both sum to 1.
-        %
         % If a full covariance estimate is used to calculate the linear
         % discriminant and this method is called on the same data that was
         % used to form the discriminant, the returned value is the
