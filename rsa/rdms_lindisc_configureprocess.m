@@ -118,6 +118,9 @@ else
     crossconout{1}(:,arg.crosscon{1}) = cons;
     crossconout{2} = fullmat;
     crossconout{2}(:,arg.crosscon{2}) = cons;
+    % reassign cons to ensure labelling is approximately correct (will
+    % capture one of the two cross-decoders that were actually run)
+    cons = crossconout{1};
     basearg = {[],nreturn};
     if arg.onewayvalidation
         cvmeth = 'validatedclassification';
